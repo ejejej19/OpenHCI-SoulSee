@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>第六組・狂野概念圖集</title>
+<style>
+  body{font-family:"PingFang TC","Noto Sans TC",sans-serif;background:#faf8f3;color:#222;max-width:920px;margin:0 auto;padding:32px 20px;}
+  h1{font-size:26px} h2{font-size:20px;margin-top:56px;border-left:6px solid #222;padding-left:12px}
+  .tag{display:inline-block;background:#222;color:#fff;font-size:12px;padding:2px 10px;border-radius:12px;margin-left:8px;vertical-align:middle}
+  figure{margin:16px 0;background:#fff;border:1.5px solid #ddd;border-radius:12px;padding:12px}
+  figcaption{font-size:14px;color:#555;padding:8px 6px 2px}
+  .punch{font-weight:700;color:#111;font-size:15px;margin-top:6px}
+  p.why{font-size:14px;color:#666}
+  svg{width:100%;height:auto}
+  .s{fill:none;stroke:#222;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+  .thin{fill:none;stroke:#222;stroke-width:1.8;stroke-linecap:round}
+  .lbl{font-size:15px;fill:#333}
+  .small{font-size:12.5px;fill:#777}
+</style>
+</head>
+<body>
+<h1>🌀 狂野概念圖集 — 丟掉亭子與 App 之後</h1>
+<p>五個形態完全不同的想像:有的詩意、有的荒謬、有的用身體感。共同點:<b>不說教、不出報告、體驗本身就是論點。</b></p>
+
+<section style="background:#fff;border:2px solid #222;border-radius:8px;padding:18px 20px;margin:26px 0 34px;box-shadow:6px 6px 0 #d9f0eb">
+  <h2 style="margin-top:0;border-left:0;padding-left:0">最新可點擊原型: Good, But Not Mine</h2>
+  <p>把「Authorship Pause」做成一個可跑的靜態互動流程:選任務、寫 prompt、保護 intent、等待、判斷 good-but-not-mine、reclaim edit、產生 authorship receipt。</p>
+  <p><a href="./good-but-not-mine-prototype.html" style="display:inline-block;background:#222;color:#fff;text-decoration:none;padding:10px 14px;border-radius:6px;font-weight:700">打開 Good, But Not Mine 原型</a></p>
+</section>
+
+<!-- ================= 1 不聽話的影子 ================= -->
+<h2>1. 不聽話的影子 <span class="tag">詩意・身體</span></h2>
+<figure>
+<svg viewBox="0 0 860 440">
+  <!-- floor & wall -->
+  <line class="s" x1="30" y1="360" x2="830" y2="360"/>
+  <line class="thin" x1="470" y1="40" x2="470" y2="360" stroke-dasharray="6 7"/>
+  <text class="small" x="478" y="58">牆(投影面)</text>
+  <!-- projector -->
+  <rect class="s" x="240" y="46" width="64" height="30" rx="6"/>
+  <text class="small" x="234" y="36">投影機 + 相機 + 姿態預測AI</text>
+  <path class="thin" d="M304 62 L640 150 M304 74 L640 330" stroke-dasharray="3 6"/>
+  <!-- person walking right -->
+  <circle class="s" cx="330" cy="180" r="22"/>
+  <path class="s" d="M330 202 L330 272 M330 224 L296 252 M330 224 L366 246 M330 272 L302 340 M330 272 L360 338"/>
+  <text class="lbl" x="268" y="392">你:正要往右走</text>
+  <!-- shadow on wall, walking LEFT, one step ahead -->
+  <g opacity="0.55">
+    <circle cx="660" cy="188" r="22" fill="#222"/>
+    <path d="M660 210 L660 280 L630 348 M660 280 L692 346 M660 232 L622 210 M660 232 L700 258" stroke="#222" stroke-width="14" stroke-linecap="round" fill="none"/>
+  </g>
+  <text class="lbl" x="586" y="392">你的影子:已經先往「AI 預測你會走」的方向動了</text>
+  <path class="thin" d="M652 120 C600 84 520 96 490 120" marker-end="url(#arr)"/>
+  <text class="small" x="500" y="96">有時它先動,你不自覺跟上</text>
+  <defs><marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="none" stroke="#222" stroke-width="1.5"/></marker></defs>
+</svg>
+<figcaption>
+走進展場,你的影子被投影在牆上——但它不完全跟著你。它跟著 <b>AI 對「你這種人」的預測</b> 在動:你還沒轉彎,它先轉了;你停下,它繼續走。多數人會不自覺跟著自己的影子調整步伐。
+<div class="punch">「是你在走,還是你的預測版本在拖著你走?」——latent persuasion 變成看得見、跟得上的東西。</div>
+</figcaption>
+</figure>
+<p class="why">為什麼不同:沒有螢幕、沒有問卷、沒有反思提示。用最古老的身份隱喻(影子)承載最新的問題(AI 的你先於你)。技術:投影 + 攝影機 + 姿態偵測(隊上做得出來)。</p>
+
+<!-- ================= 2 人生轉蛋機 ================= -->
+<h2>2. 人生轉蛋機 <span class="tag">荒謬・夜市</span></h2>
+<figure>
+<svg viewBox="0 0 860 440">
+  <!-- gacha machine -->
+  <rect class="s" x="90" y="60" width="200" height="300" rx="14"/>
+  <circle class="s" cx="190" cy="150" r="66"/>
+  <circle class="thin" cx="166" cy="128" r="14"/><circle class="thin" cx="212" cy="142" r="14"/><circle class="thin" cx="180" cy="168" r="14"/><circle class="thin" cx="222" cy="176" r="12"/>
+  <rect class="s" x="160" y="250" width="60" height="14" rx="6"/>
+  <circle class="s" cx="190" cy="300" r="18"/>
+  <path class="s" d="M190 288 L190 312 M178 300 L202 300"/>
+  <text class="small" x="120" y="46">投入 10 元+說出你的煩惱</text>
+  <!-- person -->
+  <circle class="s" cx="400" cy="150" r="20"/>
+  <path class="s" d="M400 170 L400 240 M400 190 L360 214 M400 190 L436 200 M400 240 L376 306 M400 240 L426 304"/>
+  <path class="thin" d="M436 200 L310 260"/>
+  <!-- capsule opened -->
+  <circle class="s" cx="500" cy="280" r="30"/>
+  <path class="thin" d="M470 280 L530 280"/>
+  <rect class="s" x="545" y="230" width="180" height="90" rx="8"/>
+  <text class="lbl" x="562" y="266">「離職吧。」</text>
+  <text class="small" x="562" y="292">—— AI 為你客製的建議</text>
+  <!-- wall of identical capsules -->
+  <g class="thin">
+    <circle cx="640" cy="392" r="16"/><circle cx="680" cy="392" r="16"/><circle cx="720" cy="392" r="16"/><circle cx="760" cy="392" r="16"/><circle cx="800" cy="392" r="16"/>
+  </g>
+  <text class="small" x="560" y="352">出口牆:今天所有人抽到的膠囊,攤開——</text>
+  <text class="lbl" x="596" y="430">幾乎都是同一句話。</text>
+</svg>
+<figcaption>
+夜市轉蛋機。投十元,對機器說一句你正在猶豫的事(要不要離職/分手/出國),轉出一顆膠囊——裡面是 AI 幫你做好的決定,印在籤紙上,像廟籤。走到出口才看到那面牆:<b>今天每個人的「客製化人生建議」,攤開來幾乎一模一樣。</b>
+<div class="punch">「你的重大人生決定,只值十塊錢——而且跟隔壁的人同一顆。」AI генeric 化 + 決策外包的廉價感,一次戳破。</div>
+</figcaption>
+</figure>
+<p class="why">為什麼不同:不要求使用者反思,反而把「外包決策」做到<b>荒謬地順手</b>,讓荒謬自己說話。台味(夜市/廟籤)、超便宜、五秒一輪、展場排隊神器。</p>
+
+<!-- ================= 3 與 AI 拔河 ================= -->
+<h2>3. 與 AI 拔河 <span class="tag">身體・力氣</span></h2>
+<figure>
+<svg viewBox="0 0 860 440">
+  <!-- meter -->
+  <rect class="s" x="280" y="50" width="300" height="26" rx="13"/>
+  <rect x="282" y="52" width="180" height="22" rx="11" fill="#c9c9c9"/>
+  <text class="small" x="300" y="42">主體性計:誰握著這個決定?</text>
+  <text class="small" x="250" y="68" text-anchor="end">你</text>
+  <text class="small" x="592" y="68">AI</text>
+  <!-- person pulling -->
+  <circle class="s" cx="150" cy="200" r="20"/>
+  <path class="s" d="M150 220 L138 290 M150 240 L196 252 M150 244 L198 268 M138 290 L104 350 M138 290 L162 352"/>
+  <!-- rope -->
+  <path class="s" d="M198 258 C330 268 520 268 660 260"/>
+  <!-- decision card hanging -->
+  <rect class="s" x="380" y="280" width="120" height="64" rx="8"/>
+  <text class="small" x="396" y="308">這份履歷</text>
+  <text class="small" x="396" y="328">聽誰的?</text>
+  <!-- AI winch box -->
+  <rect class="s" x="660" y="220" width="120" height="90" rx="10"/>
+  <circle class="thin" cx="720" cy="265" r="24"/>
+  <path class="thin" d="M720 241 L720 289 M696 265 L744 265"/>
+  <text class="small" x="660" y="204">AI 絞盤:建議越「有信心」,拉力越大</text>
+  <text class="small" x="640" y="336">「相信我,這樣寫比較好。」(拉力+30%)</text>
+  <path class="thin" d="M150 130 C170 100 210 96 236 108"/>
+  <text class="small" x="240" y="104">你真的得用力,才能保住自己的版本</text>
+</svg>
+<figcaption>
+一條真實的繩子,一端是你,另一端接著馬達絞盤。桌上是一個決定(履歷怎麼寫/行程怎麼排)。AI 每給一個建議,就<b>真的往它那邊拉</b>——語氣越肯定拉力越強、說「大家都這樣選」再加一級。你可以放手(接受),也可以用力拉回(堅持自己)。放手的瞬間,卡片滑進 AI 的箱子。
+<div class="punch">說服力第一次變成一股「肌肉感受得到」的力。堅持自己,原來這麼費力——這就是論點。</div>
+</figcaption>
+</figure>
+<p class="why">為什麼不同:把 sycophancy/信任校準這些抽象概念,轉譯成<b>力回饋</b>。不用讀任何字就懂。Oakley 的馬達 + 拉力計就能做。</p>
+
+<!-- ================= 4 越餵越像你 ================= -->
+<h2>4. 越餵越像你 <span class="tag">生物・恐怖谷</span></h2>
+<figure>
+<svg viewBox="0 0 860 440">
+  <!-- stage 1 -->
+  <circle class="s" cx="130" cy="180" r="22"/>
+  <path class="s" d="M130 202 L130 268 M130 222 L104 244 M130 222 L156 244 M130 268 L110 330 M130 268 L150 330"/>
+  <ellipse class="thin" cx="172" cy="160" rx="14" ry="10"/>
+  <text class="small" x="86" y="368">Day 1:肩上一顆小東西</text>
+  <text class="small" x="96" y="388">你餵牠:「晚餐吃什麼?」</text>
+  <!-- arrow -->
+  <path class="thin" d="M250 220 L310 220" marker-end="url(#arr2)"/>
+  <!-- stage 2 -->
+  <circle class="s" cx="400" cy="180" r="22"/>
+  <path class="s" d="M400 202 L400 268 M400 222 L374 244 M400 222 L426 244 M400 268 L380 330 M400 268 L420 330"/>
+  <ellipse class="s" cx="452" cy="150" rx="26" ry="20"/>
+  <circle class="thin" cx="444" cy="146" r="2.5" fill="#222"/><circle class="thin" cx="460" cy="146" r="2.5" fill="#222"/>
+  <path class="thin" d="M446 158 C450 162 456 162 460 158"/>
+  <text class="small" x="352" y="368">Day 30:牠長出一張臉</text>
+  <text class="small" x="344" y="388">你餵牠:「這工作該接嗎?」</text>
+  <path class="thin" d="M520 220 L580 220" marker-end="url(#arr2)"/>
+  <!-- stage 3: creature has person's face, person silent -->
+  <circle class="s" cx="660" cy="190" r="20"/>
+  <path class="s" d="M660 210 L660 272 M660 228 L636 250 M660 228 L684 250 M660 272 L642 332 M660 272 L678 332"/>
+  <path class="thin" d="M650 196 L670 196"/>
+  <ellipse class="s" cx="726" cy="140" rx="30" ry="26"/>
+  <circle class="thin" cx="716" cy="134" r="3" fill="#222"/><circle class="thin" cx="736" cy="134" r="3" fill="#222"/>
+  <path class="thin" d="M716 150 C722 156 732 156 738 150"/>
+  <path class="thin" d="M756 128 C790 108 812 118 816 132 C820 148 800 156 780 152" />
+  <text class="small" x="762" y="106">「我們不去了,人多。」</text>
+  <text class="small" x="612" y="368">Day 90:牠長成你的臉,替你回話</text>
+  <text class="small" x="628" y="388">你的嘴,已經是一條直線。</text>
+  <defs><marker id="arr2" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="none" stroke="#222" stroke-width="1.5"/></marker></defs>
+</svg>
+<figcaption>
+一隻掛在肩上的小生物(實體玩偶+喇叭,或 AR)。你每把一個決定丟給它,它就長大一點、<b>長得更像你一點</b>——聲音也從機械音慢慢逼近你的聲線(語音克隆)。到後來,朋友問你話,牠先答,答得比你快、比你像你。
+<div class="punch">「委託」的終點不是方便,是替身。恐怖谷不在 AI 長得像人——在牠長得像「你」。</div>
+</figcaption>
+</figure>
+<p class="why">為什麼不同:把「依賴的累積」變成一個會長大的生物,時間感、身體感、情感依附全都有。展場版:玩偶 + 你講三句話後,它用你的聲線接話(voice cloning 現成 API)。</p>
+
+<!-- ================= 5 忒修斯更衣室 ================= -->
+<h2>5. 忒修斯更衣室 <span class="tag">哲學・時尚</span></h2>
+<figure>
+<svg viewBox="0 0 860 440">
+  <!-- fitting room mirror frame -->
+  <rect class="s" x="470" y="40" width="300" height="360" rx="10"/>
+  <text class="small" x="490" y="30">「智慧試衣鏡」——它一件一件幫你變好</text>
+  <!-- real person -->
+  <circle class="s" cx="220" cy="120" r="24"/>
+  <path class="thin" d="M206 112 Q220 100 236 112"/>
+  <path class="s" d="M220 144 L220 250 M220 170 L180 200 M220 170 L260 200 M220 250 L192 340 M220 250 L250 340"/>
+  <path class="thin" d="M198 152 L242 152 L236 220 L204 220 Z"/>
+  <text class="small" x="150" y="380">你:舊T恤、亂髮、你的笑</text>
+  <!-- mirror person: progressively replaced -->
+  <circle class="s" cx="620" cy="120" r="24"/>
+  <path class="thin" d="M600 116 Q620 132 640 116"/>
+  <path class="s" d="M620 144 L620 250 M620 170 L580 200 M620 170 L660 200 M620 250 L592 340 M620 250 L650 340"/>
+  <rect class="thin" x="596" y="150" width="48" height="74" rx="6" fill="#e8e8e8"/>
+  <path class="thin" d="M596 108 C600 92 640 92 644 108" fill="#e8e8e8"/>
+  <text class="small" x="512" y="380">鏡中的你:AI 已換掉 4 件——襯衫、髮型、姿勢、微笑</text>
+  <!-- progress bar -->
+  <rect class="s" x="470" y="412" width="300" height="16" rx="8"/>
+  <rect x="472" y="414" width="129" height="12" rx="6" fill="#c9c9c9"/>
+  <text class="lbl" x="470" y="404">你還剩 43% 是你</text>
+  <!-- swap arrows -->
+  <path class="thin" d="M300 180 C380 140 420 140 470 168" marker-end="url(#arr3)"/>
+  <text class="small" x="330" y="136">每 20 秒,AI 提議再換一件:「這樣更好。」</text>
+  <text class="small" x="330" y="156">你只能按「好」或「不要」。</text>
+  <defs><marker id="arr3" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="none" stroke="#222" stroke-width="1.5"/></marker></defs>
+</svg>
+<figcaption>
+一面「智慧試衣鏡」。鏡中的你,被 AI 一件一件優化:先換襯衫,再換髮型,再調姿勢,最後——調整你的笑容。每一件單獨看都「確實比較好」。下面的量表一路掉:<b>你還剩 43% 是你。</b>到哪一件,鏡子裡的人不再是你?
+<div class="punch">忒修斯之船,穿在身上。沒有一步是錯的,但終點不是你。</div>
+</figcaption>
+</figure>
+<p class="why">為什麼不同:拍貼機問「要不要聽 AI」,這面鏡子問的是更狠的「<b>每一步都對,加起來卻錯了</b>」——漸進失去的不可察覺性。技術:攝影機 + 即時影像替換(生成式濾鏡)。</p>
+
+<hr style="margin-top:56px">
+<p style="font-size:14px;color:#777">畫 / 概念:2026-07-03。共同核心仍是題目的「主體性」,但形態換成:影子(預測先於你)、轉蛋(決策的廉價化與同質化)、拔河(說服力的體感)、寄生獸(依賴的累積)、更衣室(漸進的替換)。</p>
+</body>
+</html>

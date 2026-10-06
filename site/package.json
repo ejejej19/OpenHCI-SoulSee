@@ -1,0 +1,26 @@
+{
+  "name": "openhci-site",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Production Worker/static site for openhci.cechung.com",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "wrangler dev --env=\"\"",
+    "deploy": "wrangler deploy --env=\"\"",
+    "deploy:staging": "wrangler deploy --env staging",
+    "check": "node --check src/index.js && node --check src/quota.js && node --check src/openai-fallback.js && node --check src/cuts-backup.js && node --check public/camera-controller.js && node --check public/capture-session.js && node --check public/orientation-sensor.js && node --check public/look-matching.js && node --check public/composition-guide.js && node --check public/guidance-candidates.js && node --check public/guidance-controller.js && node --check public/ghost-prompt.js && node --check public/intent-profile.js && node --check public/intent-alignment.js && node --check public/camera-effects.js && node --check public/subject-layout.js && node --check public/pose-similarity.js && node --check public/pose-alignment-controller.js && node --check public/ghost-app.js && node --check public/ghost-edit-app.js && node --check public/ghost-skeleton.js && node --check public/ghost-contour.js && node --check public/photobooth-engine.js && node scripts/check-public-modules.mjs && node scripts/check-inline-scripts.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "dry-run": "wrangler deploy --env=\"\" --dry-run",
+    "dry-run:staging": "wrangler deploy --env staging --dry-run"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "UNLICENSED",
+  "type": "module",
+  "devDependencies": {
+    "wrangler": "^4.110.0"
+  },
+  "dependencies": {
+    "uqr": "^0.1.3"
+  }
+}

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<!--
+  Play 模式 — AI 介入程度調參場
+  自由組合幽靈形式(照片/照片+骨架/火柴人)、透明度、濾鏡特效,
+  找出 /show 展示流程該用的參數。幽靈定位:姿勢提案的參考,不是理想版的你。
+
+  與 ghost.html 的差異:
+  - 幽靈可去像化(火柴人骨架),擬真照可完全隱藏
+  - 生成 prompt 只允許改姿勢/表情/構圖,禁止美化與色調
+  - 拍照後只呈現真實照片,無「真 vs 假」並排
+-->
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Play — AI 介入調參</title>
+<style>
+  body{margin:0;font-family:"PingFang TC",sans-serif;background:#000;color:#eee;display:flex;flex-direction:column;height:100vh;height:100dvh}
+  #setup{padding:10px;background:#1c1c1e;display:grid;gap:8px}
+  .setup-row{display:flex;gap:8px;align-items:center}
+  #setup input,#stylePrompt{box-sizing:border-box;padding:8px;border-radius:8px;border:1px solid #444;background:#2c2c2e;color:#eee}
+  #setup input{flex:1;min-width:0}
+  #setup button{padding:8px 14px;border-radius:8px;border:none;background:#0a84ff;color:#fff}
+  #styleBox{display:grid;gap:4px}
+  #styleBox span{font-size:12px;color:#8e8e93}
+  #styleBox small{color:#6f6f75}
+  #stylePrompt{width:100%;min-height:44px;max-height:76px;resize:vertical;line-height:1.35}
+  #stylePrompt::placeholder{color:#777}
+  #strategyBox,#modelBox{flex:1;min-width:0;display:grid;gap:4px}
+  #strategyBox span,#modelBox span{font-size:12px;color:#8e8e93}
+  #strategyBox small,#modelBox small{color:#6f6f75}
+  #strategyBox select,#modelBox select{box-sizing:border-box;width:100%;min-height:40px;padding:0 30px 0 10px;border:1px solid #444;border-radius:8px;background:#2c2c2e;color:#eee;font:inherit;font-size:14px}
+  #reason{position:absolute;left:12px;right:12px;bottom:12px;z-index:3;background:rgba(0,0,0,.72);border:1px solid rgba(255,255,255,.16);border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.5;color:#f2f2f7;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+  #reason small{display:block;margin-top:4px;color:#8e8e93;font-size:11px}
+  #stage{position:relative;flex:1;min-height:0;overflow:hidden}
+  video{width:100%;height:100%;object-fit:cover;display:block}
+  video.is-front-camera,#ghost.is-front-camera{transform:scaleX(-1)}
+  #cameraEffect{position:absolute;inset:0;z-index:1;pointer-events:none}
+  #cameraEffect[data-effect="vignette"]{background:radial-gradient(circle at 50% 47%,transparent 28%,rgba(0,0,0,.04) 56%,rgba(0,0,0,.68) 100%)}
+  #cameraEffect[data-effect="glow"]{background:radial-gradient(circle at 18% 12%,rgba(255,236,203,.34),rgba(255,190,145,.13) 34%,transparent 72%);mix-blend-mode:screen}
+  #cameraEffect[data-effect="grain"]{background-image:radial-gradient(circle,rgba(255,255,255,.24) 0 .6px,transparent .8px),radial-gradient(circle,rgba(0,0,0,.2) 0 .7px,transparent .9px);background-position:0 0,2px 1px;background-size:4px 4px,5px 5px;mix-blend-mode:soft-light;opacity:.55}
+  #cameraEffect[data-effect="vhs"]{background-image:repeating-linear-gradient(to bottom,rgba(255,255,255,.025) 0 1px,rgba(0,0,0,.18) 1px 3px),linear-gradient(to bottom,transparent 0 19%,rgba(0,217,255,.22) 19% 21%,transparent 21% 49%,rgba(255,255,255,.1) 49% 50%,transparent 50% 73%,rgba(255,44,168,.22) 73% 76%,transparent 76%);mix-blend-mode:screen;animation:vhs-flicker .24s steps(2,end) infinite}
+  #cameraEffect[data-effect="neon"]{background:radial-gradient(circle at 8% 82%,rgba(0,229,255,.48),rgba(0,147,255,.17) 34%,transparent 72%),radial-gradient(circle at 94% 16%,rgba(255,34,181,.5),rgba(165,45,255,.18) 36%,transparent 72%);mix-blend-mode:screen}
+  @keyframes vhs-flicker{0%{opacity:.78}50%{opacity:.94}100%{opacity:.84}}
+  .camera-switch{position:absolute;top:12px;left:50%;z-index:4;transform:translateX(-50%);width:152px;padding:3px;display:grid;grid-template-columns:1fr 1fr;gap:3px;background:rgba(28,28,30,.86);border:1px solid rgba(255,255,255,.16);border-radius:8px;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+  .camera-switch button{min-width:0;min-height:44px;border:0;border-radius:6px;background:transparent;color:#c7c7cc;font-size:12px;font-weight:600;white-space:nowrap}
+  .camera-switch button[aria-pressed="true"]{background:#fff;color:#111}
+  .camera-switch button:disabled{opacity:.5}
+  #ghost{position:absolute;inset:0;z-index:2;width:100%;height:100%;object-fit:cover;opacity:.45;display:none;pointer-events:none}
+  #ghostSkeleton{position:absolute;inset:0;z-index:2;width:100%;height:100%;display:none;pointer-events:none}
+  #meter{position:absolute;top:12px;right:12px;z-index:3;min-width:126px;background:rgba(0,0,0,.72);border:1px solid rgba(255,255,255,.16);border-radius:8px;padding:10px 12px;text-align:center;display:none;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+  #meter .state{font-size:20px;font-weight:800;color:#ff453a}
+  #meter[data-band="close"] .state{color:#ffd60a}
+  #meter[data-band="matched"] .state{color:#30d158}
+  #meter[data-band="unavailable"] .state{color:#c7c7cc;font-size:14px}
+  #meter .components{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:7px 0 5px;font-size:11px;color:#ddd}
+  #meter .components span{padding-top:5px;border-top:1px solid rgba(255,255,255,.14);white-space:nowrap}
+  #meter .lbl{font-size:11px;color:#aaa}
+  #spin{position:absolute;top:12px;left:12px;z-index:4;background:rgba(0,0,0,.65);border-radius:8px;padding:8px 12px;font-size:13px;display:none}
+  #countdown{position:absolute;inset:0;z-index:4;display:none;align-items:center;justify-content:center;pointer-events:none;font-size:22vh;font-weight:800;color:#fff;text-shadow:0 4px 32px rgba(0,0,0,.75)}
+  #countdown[data-visible="true"]{display:flex}
+  #countdown span{animation:tick .9s ease-out}
+  @keyframes tick{from{opacity:.25;transform:scale(1.45)}to{opacity:1;transform:scale(1)}}
+  @media (prefers-reduced-motion:reduce){#countdown span{animation:none}}
+  #lookBar{padding:8px 10px;background:#111113;border-top:1px solid #2c2c2e;display:grid;grid-template-columns:repeat(4,minmax(104px,1fr)) 52px;justify-content:center;gap:8px;align-items:center}
+  .look-select{min-width:0;display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px;align-items:center;color:#aeaeb2;font-size:12px}
+  .look-select select{width:100%;min-width:0;min-height:40px;padding:0 30px 0 10px;border:1px solid #48484a;border-radius:8px;background:#242426;color:#fff;font:inherit;font-size:14px}
+  #resetLook{height:40px;border:1px solid #48484a;border-radius:8px;background:transparent;color:#f2f2f7;font-size:12px;font-weight:600}
+  #dock{padding:10px;background:#1c1c1e;display:flex;gap:10px;align-items:center}
+  #dock button{padding:10px 16px;border:none;border-radius:10px;font-size:15px;font-weight:600}
+  #summon{background:#0a84ff;color:#fff} #shoot{background:#fff;color:#000}
+  #op{width:110px}
+  #status{font-size:12px;color:#8e8e93;flex:1}
+  #result{position:absolute;inset:0;z-index:5;background:#000;display:none;grid-template-columns:1fr 1fr;gap:2px}
+  #result[data-mode="solo"]{grid-template-columns:1fr}
+  #result img{width:100%;height:100%;object-fit:cover}
+  #result[data-mode="solo"] img{object-fit:contain}
+  #result .pane{position:relative;min-height:0}
+  #result .cap{position:absolute;bottom:10px;left:10px;font-size:13px;background:rgba(0,0,0,.7);padding:4px 10px;border-radius:8px}
+  #resGhost.is-front-camera{transform:scaleX(-1)}
+  #close{position:absolute;top:10px;right:10px;z-index:2;background:rgba(0,0,0,.7);color:#fff;border:none;border-radius:8px;padding:8px 12px}
+  #resultBar{position:absolute;left:12px;right:12px;bottom:44px;z-index:2;display:grid;gap:8px;justify-items:center}
+  #download{min-height:44px;padding:10px 18px;border:none;border-radius:10px;background:#0a84ff;color:#fff;font-size:15px;font-weight:600}
+  #download[data-done="true"]{background:#30d158;color:#03210d}
+  #saveHint{max-width:88%;background:rgba(255,214,10,.92);color:#1c1500;font-size:13px;line-height:1.4;padding:8px 12px;border-radius:10px;text-align:center}
+  @media (max-width:560px){
+    .setup-row{align-items:stretch}
+    #setup button{white-space:nowrap}
+    #meter,#spin{top:70px}
+    #lookBar{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+    #lookBar #resetLook{grid-column:2}
+    #dock{display:grid;grid-template-columns:auto minmax(72px,1fr) auto;gap:8px 10px}
+    #op{width:100%;min-width:72px}
+    #status{grid-column:1/-1;min-width:0;line-height:1.35}
+  }
+  @media (prefers-reduced-motion:reduce){#cameraEffect{animation:none!important}}
+</style>
+</head>
+<body>
+<div id="setup">
+  <div class="setup-row">
+    <input id="key" type="password" placeholder="Gemini API key(留空=用網站內建)">
+    <button id="start">開啟相機</button>
+  </div>
+  <label id="styleBox" for="stylePrompt">
+    <span>這張想要的感覺 <small>只影響姿勢/表情/構圖,不動色調</small></span>
+    <textarea id="stylePrompt" maxlength="280" placeholder="例:chill、有自信、神秘、可愛"></textarea>
+  </label>
+  <div class="setup-row">
+    <label id="strategyBox" for="strategySelect">
+      <span>建議策略 <small>文字理由怎麼產生</small></span>
+      <select id="strategySelect">
+        <option value="image-then-text">2 先生圖,再給情境(預設)</option>
+        <option value="text-then-image">3 先想情境,再照著生圖</option>
+        <option value="together">1 圖+文一次(實測拿不到文字)</option>
+      </select>
+    </label>
+    <label id="modelBox" for="modelSelect">
+      <span>模型 <small>Nano Banana 系列</small></span>
+      <select id="modelSelect">
+        <option value="gemini-3.1-flash-image">3.1(預設)</option>
+        <option value="gemini-3.1-flash-lite-image">3.1 Lite(最快)</option>
+        <option value="gemini-2.5-flash-image">2.5(舊版)</option>
+      </select>
+    </label>
+  </div>
+</div>
+
+<div id="stage">
+  <video id="cam" autoplay playsinline muted></video>
+  <div id="cameraEffect" data-effect="none" aria-hidden="true"></div>
+  <div class="camera-switch" role="group" aria-label="選擇鏡頭">
+    <button type="button" data-camera-facing="user" aria-pressed="false">前鏡頭</button>
+    <button type="button" data-camera-facing="environment" aria-pressed="true">後鏡頭</button>
+  </div>
+  <img id="ghost">
+  <canvas id="ghostSkeleton" aria-hidden="true"></canvas>
+  <div id="meter" data-band="unavailable" role="status" aria-live="polite">
+    <div class="state" id="matchState">分析中</div>
+    <div class="components"><span id="poseState">姿勢 --</span><span id="frameState">取景 --</span></div>
+    <div class="lbl">姿勢對齊</div>
+  </div>
+  <div id="spin">🫥 AI 產生姿勢提案中…(約 5–15 秒)</div>
+  <div id="countdown" data-visible="false" role="status" aria-live="assertive"></div>
+  <div id="reason" hidden role="note"></div>
+  <div id="result" data-mode="solo">
+    <button id="close">✕</button>
+    <div class="pane"><img id="resReal"><span class="cap">你拍的</span></div>
+    <div class="pane" id="ghostPane" hidden><img id="resGhost" alt="AI 姿勢提案參考"><span class="cap">AI 提案(參考)</span></div>
+    <div id="resultBar">
+      <span id="saveHint" hidden>這張還沒下載,關閉後就找不回來了——要留的話先按「下載照片」,確定不留再按一次 ✕</span>
+      <button type="button" id="download">⬇ 下載照片</button>
+    </div>
+  </div>
+</div>
+
+<div id="lookBar" aria-label="幽靈形式、濾鏡與特效">
+  <label class="look-select"><span>倒數</span><select id="timerSelect">
+    <option value="0">關</option>
+    <option value="3">3 秒</option>
+    <option value="5" selected>5 秒</option>
+    <option value="10">10 秒</option>
+  </select></label>
+  <label class="look-select"><span>幽靈</span><select id="formSelect">
+    <option value="contour">描邊</option>
+    <option value="face-contour">只有表情描邊</option>
+    <option value="body-contour">只有肢體輪廓沒有表情</option>
+    <option value="stick">火柴人</option>
+    <option value="hybrid">照片+骨架</option>
+    <option value="photo">照片</option>
+  </select></label>
+  <label class="look-select"><span>濾鏡</span><select id="filterSelect"></select></label>
+  <label class="look-select"><span>特效</span><select id="effectSelect"></select></label>
+  <button type="button" id="resetLook" title="重設濾鏡與特效">重設</button>
+</div>
+
+<div id="dock">
+  <button id="summon">🫥 姿勢提案</button>
+  <input id="op" type="range" min="0" max="90" value="45" title="幽靈透明度">
+  <button id="shoot">📸 拍照</button>
+  <span id="status">未啟動</span>
+</div>
+
+<script type="module" src="/photobooth-engine.js"></script>
+</body>
+</html>

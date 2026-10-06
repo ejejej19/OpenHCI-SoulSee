@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI 幽靈後製</title>
+<style>
+  :root{color-scheme:dark}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;min-height:100dvh;display:grid;grid-template-rows:auto minmax(0,1fr);background:#050505;color:#f2f2f7;font-family:"PingFang TC",sans-serif}
+  button,select,input{font:inherit}
+  button,a{touch-action:manipulation}
+  #editorHeader{min-height:58px;padding:8px 12px;display:grid;grid-template-columns:minmax(96px,1fr) auto minmax(96px,1fr);align-items:center;gap:10px;background:#1c1c1e;border-bottom:1px solid #3a3a3c}
+  #backToCapture{justify-self:start;color:#64d2ff;text-decoration:none;font-size:13px;font-weight:700}
+  .step-title{display:grid;justify-items:center;gap:1px;font-size:14px}
+  .step-title span{color:#8e8e93;font-size:11px;font-variant-numeric:tabular-nums}
+  #savePhoto{justify-self:end;min-height:40px;padding:0 13px;border:0;border-radius:8px;background:#0a84ff;color:#fff;font-size:13px;font-weight:700}
+  #savePhoto:disabled{opacity:.45}
+  #editorMain{min-height:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,360px)}
+  #previewRegion{position:relative;min-width:0;min-height:0;display:grid;place-items:center;overflow:hidden;background:#000;padding:14px}
+  #editCanvas{display:block;max-width:100%;max-height:100%;width:auto;height:auto;background:#111}
+  #viewModes{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);display:grid;grid-template-columns:repeat(3,minmax(64px,1fr));gap:1px;padding:3px;border:1px solid rgba(255,255,255,.18);border-radius:8px;background:rgba(28,28,30,.88);backdrop-filter:blur(10px)}
+  #viewModes button{min-height:38px;padding:0 10px;border:0;border-radius:6px;background:transparent;color:#c7c7cc;font-size:12px;font-weight:700;white-space:nowrap}
+  #viewModes button[aria-pressed="true"]{background:#fff;color:#111}
+  #viewModes[hidden],
+  #viewModes button[hidden]{display:none}
+  #editorPanel{min-height:0;overflow:auto;background:#1c1c1e;border-left:1px solid #3a3a3c}
+  #emptyState{min-height:100%;padding:24px;display:grid;place-content:center;justify-items:center;gap:14px;text-align:center}
+  #emptyState[hidden],#editorControls[hidden]{display:none}
+  #emptyState strong{font-size:17px}
+  #emptyState a{min-height:42px;padding:0 15px;display:inline-grid;place-items:center;border-radius:8px;background:#0a84ff;color:#fff;text-decoration:none;font-weight:700}
+  #editorControls{display:grid;align-content:start}
+  .panel-band{padding:15px 16px;border-bottom:1px solid #3a3a3c}
+  #intentSummary{display:grid;gap:4px}
+  #intentSummary span{color:#8e8e93;font-size:11px}
+  #intentSummary strong{font-size:13px;line-height:1.4;overflow-wrap:anywhere}
+  #captureBand{color:#aeaeb2;font-size:11px}
+  .tool-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+  .tool-head strong{font-size:13px}
+  #syncLook,#resetLook{min-height:38px;padding:0 12px;border:1px solid #48484a;border-radius:8px;background:transparent;color:#f2f2f7;font-size:12px;font-weight:700}
+  #syncLook{border-color:#0a84ff;background:#0a84ff;color:#fff}
+  #syncLook:disabled{opacity:.42}
+  .select-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .select-control{display:grid;gap:6px;color:#aeaeb2;font-size:11px}
+  .select-control select{width:100%;min-width:0;min-height:42px;padding:0 30px 0 10px;border:1px solid #48484a;border-radius:8px;background:#2c2c2e;color:#fff;font-size:14px}
+  #lookTuning{display:grid;gap:13px}
+  .look-slider{display:grid;grid-template-columns:1fr 42px;gap:5px 8px;align-items:center;color:#d1d1d6;font-size:12px}
+  .look-slider output{text-align:right;color:#f2f2f7;font-variant-numeric:tabular-nums}
+  .look-slider input{grid-column:1/-1;width:100%;margin:0;accent-color:#64d2ff}
+  #editorActions{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  #editorStatus{min-width:0;color:#8e8e93;font-size:11px;line-height:1.35;text-align:right}
+  @media(max-width:760px){
+    body{grid-template-rows:auto minmax(0,1fr)}
+    #editorHeader{grid-template-columns:minmax(80px,1fr) auto minmax(80px,1fr)}
+    #editorMain{grid-template-columns:1fr;grid-template-rows:minmax(42dvh,1fr) minmax(260px,42dvh)}
+    #editorPanel{border-left:0;border-top:1px solid #3a3a3c}
+    #previewRegion{padding:8px}
+    #viewModes{bottom:10px}
+    .panel-band{padding:12px 14px}
+  }
+  @media(max-width:380px){
+    #editorHeader{padding-left:8px;padding-right:8px}
+    #backToCapture,#savePhoto{font-size:11px}
+    #savePhoto{padding:0 9px}
+    #viewModes button{min-width:58px;padding:0 7px}
+  }
+</style>
+</head>
+<body>
+<header id="editorHeader">
+  <a id="backToCapture" href="/ghost">返回拍攝</a>
+  <div class="step-title"><strong>後製</strong><span>2 / 2</span></div>
+  <button type="button" id="savePhoto" disabled>儲存照片</button>
+</header>
+<main id="editorMain">
+  <section id="previewRegion" aria-label="照片預覽">
+    <canvas id="editCanvas" role="img" aria-label="後製照片"></canvas>
+    <div id="viewModes" role="group" aria-label="預覽模式" hidden>
+      <button type="button" data-view-mode="edited" aria-pressed="true">後製</button>
+      <button type="button" data-view-mode="original" aria-pressed="false">原圖</button>
+      <button type="button" data-view-mode="ghost" aria-pressed="false" hidden>AI 參考</button>
+    </div>
+  </section>
+  <aside id="editorPanel" aria-label="後製控制">
+    <div id="emptyState" hidden>
+      <strong>沒有可編輯的照片</strong>
+      <a href="/ghost">返回拍攝</a>
+    </div>
+    <div id="editorControls" hidden>
+      <section class="panel-band" id="intentSummary">
+        <span>色調意圖</span>
+        <strong id="lookIntent">原始外觀</strong>
+        <small id="captureBand"></small>
+      </section>
+      <section class="panel-band">
+        <div class="tool-head"><strong>AI 色調</strong><button type="button" id="syncLook" disabled>套用</button></div>
+        <div class="select-grid">
+          <label class="select-control"><span>濾鏡</span><select id="filterSelect"></select></label>
+          <label class="select-control"><span>特效</span><select id="effectSelect"></select></label>
+        </div>
+      </section>
+      <section class="panel-band" id="lookTuning">
+        <label class="look-slider"><span>明度</span><output data-look-output="brightness">100</output><input data-look-control="brightness" type="range" min="70" max="130" value="100"></label>
+        <label class="look-slider"><span>對比</span><output data-look-output="contrast">100</output><input data-look-control="contrast" type="range" min="70" max="140" value="100"></label>
+        <label class="look-slider"><span>飽和</span><output data-look-output="saturation">100</output><input data-look-control="saturation" type="range" min="50" max="160" value="100"></label>
+        <label class="look-slider"><span>冷暖</span><output data-look-output="temperature">0</output><input data-look-control="temperature" type="range" min="-35" max="35" value="0"></label>
+      </section>
+      <section class="panel-band" id="editorActions">
+        <button type="button" id="resetLook">重設調整</button>
+        <span id="editorStatus" role="status" aria-live="polite">載入中</span>
+      </section>
+    </div>
+  </aside>
+</main>
+<script type="module" src="/ghost-edit-app.js"></script>
+</body>
+</html>

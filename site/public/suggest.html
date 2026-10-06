@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<!--
+  Mirror Passport — VLM 取景判斷 PoC(單檔可跑)
+  ─────────────────────────────────────────────
+  怎麼跑(相機需要 secure context,file:// 打不開相機):
+    1. cd /Users/user0/OpenHCI/P6/poc
+    2. python3 -m http.server 8000
+    3. 瀏覽器開 http://localhost:8000/vlm-suggest-poc.html
+    4. 貼上 Anthropic API key(console.anthropic.com → API Keys)
+    5. 按「開啟相機」→ 等 20 秒或按 ✨
+  ⚠️ API key 只存在你瀏覽器的 localStorage;此檔僅供本機/展場機使用,絕不可公開部署。
+-->
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VLM 取景判斷 PoC</title>
+<style>
+  body{margin:0;font-family:"PingFang TC",sans-serif;background:#111;color:#eee;display:flex;flex-direction:column;height:100vh}
+  #setup{padding:12px;background:#1c1c1e;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  #setup input{flex:1;min-width:220px;padding:8px;border-radius:8px;border:1px solid #444;background:#2c2c2e;color:#eee}
+  #setup select,#setup button{padding:8px 14px;border-radius:8px;border:none;background:#0a84ff;color:#fff;font-size:14px}
+  #setup select{background:#2c2c2e;border:1px solid #444}
+  #stage{position:relative;flex:1;overflow:hidden;background:#000}
+  video{width:100%;height:100%;object-fit:cover}
+  video.is-front-camera{transform:scaleX(-1)}
+  .camera-switch{position:absolute;top:12px;left:50%;z-index:2;transform:translateX(-50%);width:152px;padding:3px;display:grid;grid-template-columns:1fr 1fr;gap:3px;background:rgba(28,28,30,.86);border:1px solid rgba(255,255,255,.16);border-radius:8px;backdrop-filter:blur(10px)}
+  .camera-switch button{min-width:0;min-height:44px;border:0;border-radius:6px;background:transparent;color:#c7c7cc;font-size:12px;font-weight:600;white-space:nowrap}
+  .camera-switch button[aria-pressed="true"]{background:#fff;color:#111}
+  .camera-switch button:disabled{opacity:.5}
+  /* 疊層 */
+  #overlay{position:absolute;inset:0;pointer-events:none}
+  .grid line{stroke:rgba(255,255,255,.7);stroke-width:1.5;stroke-dasharray:6 6}
+  .arrow{position:absolute;font-size:64px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.8));animation:pulse 1s infinite}
+  @keyframes pulse{50%{transform:scale(1.15)}}
+  /* 建議卡 */
+  #card{position:absolute;left:12px;right:12px;bottom:88px;z-index:3;background:rgba(28,28,30,.94);border-radius:16px;padding:14px 16px;display:none;box-shadow:0 8px 30px rgba(0,0,0,.5)}
+  #card .tag{font-size:12px;color:#0a84ff;margin-bottom:4px}
+  #card .txt{font-size:20px;font-weight:700;margin-bottom:10px}
+  #card .btns{display:flex;gap:10px}
+  #card button{flex:1;padding:10px;border:none;border-radius:10px;font-size:16px;font-weight:600}
+  #apply{background:#0a84ff;color:#fff} #reroll{background:#3a3a3c;color:#eee}
+  #bar{position:absolute;left:0;bottom:0;height:3px;background:#0a84ff;width:100%;transition:width 8s linear;border-radius:0 0 16px 16px}
+  /* 底欄 */
+  #dock{padding:10px 14px;background:#1c1c1e;display:flex;gap:10px;align-items:center}
+  #sparkle{font-size:26px;background:none;border:2px solid #0a84ff;border-radius:50%;width:52px;height:52px;color:#fff}
+  #status{font-size:12px;color:#8e8e93;flex:1}
+  #export{padding:8px 12px;border-radius:8px;border:1px solid #444;background:#2c2c2e;color:#eee}
+</style>
+</head>
+<body>
+<div id="setup">
+  <input id="key" type="password" placeholder="貼上 Anthropic API key(sk-ant-...)">
+  <select id="model">
+    <option value="claude-opus-4-8" selected>claude-opus-4-8(品質)</option>
+    <option value="claude-haiku-4-5">claude-haiku-4-5(快/便宜)</option>
+  </select>
+  <button id="start">開啟相機</button>
+</div>
+
+<div id="stage">
+  <video id="cam" autoplay playsinline muted></video>
+  <div class="camera-switch" role="group" aria-label="選擇鏡頭">
+    <button type="button" data-camera-facing="user" aria-pressed="false">前鏡頭</button>
+    <button type="button" data-camera-facing="environment" aria-pressed="true">後鏡頭</button>
+  </div>
+  <div id="overlay"></div>
+  <div id="card">
+    <div class="tag" id="cardTag"></div>
+    <div class="txt" id="cardTxt"></div>
+    <div class="btns">
+      <button id="apply">套用</button>
+      <button id="reroll">換一個 ✨</button>
+    </div>
+    <div id="bar"></div>
+  </div>
+</div>
+
+<div id="dock">
+  <button id="sparkle" title="主動要建議">✨</button>
+  <span id="status">尚未啟動</span>
+  <button id="export">匯出 log</button>
+</div>
+
+<script type="module">
+import { CameraController } from '/camera-controller.js';
+
+/* ───────────── 1. 設定與狀態 ───────────── */
+const COOLDOWN_MS = 20000;      // 自動推卡週期
+const CARD_TTL_MS = 8000;       // 卡片無互動自動淡出 = ignore
+const API_TIMEOUT_MS = 8000;    // 超時 → fallback 卡
+const keyEl = document.getElementById('key');
+keyEl.value = localStorage.getItem('anthropic_key') || '';
+keyEl.addEventListener('change', () => localStorage.setItem('anthropic_key', keyEl.value.trim()));
+
+let history = [];   // 個人化記憶:[{type,text,action}]
+let log = JSON.parse(localStorage.getItem('mp_log') || '[]');
+let currentCard = null, cardShownAt = 0, cardTimer = null, busy = false;
+
+/* ───────────── 2. 建議的 JSON Schema(structured outputs 保證合規) ───────────── */
+const SUGGESTION_SCHEMA = {
+  type: "object",
+  properties: {
+    type:    { type: "string", enum: ["pose", "composition", "angle", "light"] },
+    text:    { type: "string", description: "給拍攝者的一句繁體中文建議,14 字以內,具體可執行" },
+    overlay: { type: "string", enum: ["grid_thirds","arrow_left","arrow_right","arrow_closer","arrow_back","none"] },
+    reason:  { type: "string", description: "一句話:為何這條建議適合此畫面" }
+  },
+  required: ["type", "text", "overlay", "reason"],
+  additionalProperties: false
+};
+
+const SYSTEM_PROMPT = `你是旅拍攝影指導。使用者正用手機取景,你會看到當前畫面的截圖。
+針對「這個畫面、這個人」給一條最能讓照片變好看的具體建議(繁體中文,14 字以內)。
+規則:
+- 建議要誘人、有把握,像網美攝影師的口吻(例:「回頭看鏡頭,更有故事感」)。
+- type 選擇:主體姿勢問題選 pose;位置/裁切選 composition;拍攝角度選 angle;明暗/逆光選 light。
+- overlay:建議往左/右移用 arrow_left/right;靠近用 arrow_closer;後退用 arrow_back;構圖類用 grid_thirds;姿勢/光線用 none。
+- 若附上使用者過往紀錄,建議要順著他採納過的偏好,避開他忽略過的類型。`;
+
+/* ───────────── 3. 相機 ───────────── */
+const video = document.getElementById('cam');
+let suggestionLoopStarted = false;
+const camera = new CameraController({
+  video,
+  trigger: document.getElementById('start'),
+  buttons: document.querySelectorAll('[data-camera-facing]'),
+  onStarted: mode => {
+    setStatus(`${mode === 'user' ? '前' : '後'}鏡頭已啟動,等待第一張建議卡…`);
+    if (suggestionLoopStarted) return;
+    suggestionLoopStarted = true;
+    setInterval(() => { if (!busy && !currentCard) requestSuggestion('push'); }, COOLDOWN_MS);
+    setTimeout(() => requestSuggestion('push'), 3000); // 開場 3 秒先來一張
+  },
+  onError: error => setStatus('無法開啟相機:' + error.message),
+});
+window.addEventListener('pagehide', () => camera.stop());
+
+/* ───────────── 4. 抓 frame → 512px JPEG base64 ───────────── */
+function captureFrame() {
+  const w = 512, h = Math.round(512 * video.videoHeight / video.videoWidth) || 384;
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  c.getContext('2d').drawImage(video, 0, 0, w, h);
+  return c.toDataURL('image/jpeg', 0.8).split(',')[1]; // 去掉 data: 前綴
+}
+
+/* ───────────── 5. 呼叫 Claude(核心) ───────────── */
+async function requestSuggestion(source) {
+  const apiKey = keyEl.value.trim();   // 留空 → 走同源代理 /api/suggest(部署版)
+  if (!video.videoWidth) return;
+  busy = true; setStatus('AI 看取景中…');
+
+  const recentHistory = history.slice(-8).map(h => `${h.action === 'accept' ? '採納' : '忽略'}:${h.type}「${h.text}」`).join(';') || '(無)';
+  const body = {
+    model: document.getElementById('model').value,
+    max_tokens: 300,
+    system: SYSTEM_PROMPT,
+    output_config: { format: { type: "json_schema", schema: SUGGESTION_SCHEMA } },
+    messages: [{
+      role: "user",
+      content: [
+        { type: "image", source: { type: "base64", media_type: "image/jpeg", data: captureFrame() } },
+        { type: "text", text: `使用者本旅程的紀錄:${recentHistory}。請給下一條建議。` }
+      ]
+    }]
+  };
+
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), API_TIMEOUT_MS);
+  const t0 = performance.now();
+  try {
+    const endpoint = apiKey ? "https://api.anthropic.com/v1/messages" : "/api/suggest";
+    const headers = { "content-type": "application/json" };
+    if (apiKey) Object.assign(headers, {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true"  // 瀏覽器直連必加
+    });
+    const res = await fetch(endpoint, {
+      method: "POST", headers, body: JSON.stringify(body), signal: ctrl.signal
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.json()).error?.message}`);
+    const data = await res.json();
+    if (data.stop_reason === "refusal") throw new Error("refusal");
+    const textBlock = data.content.find(b => b.type === "text");
+    const sug = JSON.parse(textBlock.text);          // structured outputs 保證合法 JSON
+    sug._latency_s = +((performance.now() - t0) / 1000).toFixed(2);   // 實測 API 延遲
+    showCard(sug, source, "vlm");
+  } catch (e) {
+    console.warn('VLM 失敗,用 fallback:', e.message);
+    showCard(randomFallback(), source, "fallback");
+  } finally {
+    clearTimeout(timer); busy = false;
+  }
+}
+
+/* ───────────── 6. Fallback 卡池(斷網/超時用) ───────────── */
+const FALLBACK = [
+  { type:"pose", text:"回頭看鏡頭,更有故事感", overlay:"none", reason:"fallback" },
+  { type:"composition", text:"人往右移,留出背景", overlay:"arrow_right", reason:"fallback" },
+  { type:"angle", text:"蹲低一點,腿會更長", overlay:"none", reason:"fallback" },
+  { type:"light", text:"轉向窗光,臉會更亮", overlay:"none", reason:"fallback" },
+  { type:"composition", text:"再靠近一步,主角更突出", overlay:"arrow_closer", reason:"fallback" },
+];
+const randomFallback = () => FALLBACK[Math.floor(Math.random() * FALLBACK.length)];
+
+/* ───────────── 7. 建議卡 UI + 四行為記錄 ───────────── */
+const card = document.getElementById('card'), bar = document.getElementById('bar');
+const TYPE_LABEL = { pose:"🧍 姿勢", composition:"🖼 構圖", angle:"📐 角度", light:"💡 光線" };
+
+function showCard(sug, source, engine) {
+  currentCard = { ...sug, source, engine }; cardShownAt = Date.now();
+  document.getElementById('cardTag').textContent = `${TYPE_LABEL[sug.type]}・${engine === 'vlm' ? 'AI 即時判斷' : '備援'}`;
+  document.getElementById('cardTxt').textContent = sug.text;
+  card.style.display = 'block';
+  bar.style.width = '100%'; requestAnimationFrame(() => bar.style.width = '0%');
+  clearTimeout(cardTimer);
+  cardTimer = setTimeout(() => resolveCard('ignore'), CARD_TTL_MS);
+  setStatus(`建議來了(${source === 'pull' ? '你主動要的' : '自動'})${sug._latency_s ? `・API ${sug._latency_s}s` : ''}`);
+}
+
+function resolveCard(action) {
+  if (!currentCard) return;
+  clearTimeout(cardTimer);
+  const entry = {
+    ts: new Date().toISOString(),
+    source: currentCard.source, engine: currentCard.engine,
+    type: currentCard.type, text: currentCard.text,
+    action, time_to_action_s: +((Date.now() - cardShownAt) / 1000).toFixed(1),
+    api_latency_s: currentCard._latency_s ?? null
+  };
+  log.push(entry); localStorage.setItem('mp_log', JSON.stringify(log));
+  history.push({ type: currentCard.type, text: currentCard.text, action });
+  if (action === 'accept') renderOverlay(currentCard.overlay);
+  card.style.display = 'none'; currentCard = null;
+  setStatus(`已記錄:${action}(${entry.time_to_action_s}s)・累計 ${log.length} 筆`);
+}
+
+document.getElementById('apply').onclick  = () => resolveCard('accept');
+document.getElementById('reroll').onclick = () => { resolveCard('reroll'); requestSuggestion('reroll'); };
+document.getElementById('sparkle').onclick = () => { if (!busy) { if (currentCard) resolveCard('ignore'); requestSuggestion('pull'); } };
+
+/* ───────────── 8. 疊層渲染 ───────────── */
+const overlayEl = document.getElementById('overlay');
+function renderOverlay(kind) {
+  overlayEl.innerHTML = '';
+  if (kind === 'grid_thirds') {
+    overlayEl.innerHTML = `<svg class="grid" width="100%" height="100%">
+      <line x1="33.3%" y1="0" x2="33.3%" y2="100%"/><line x1="66.6%" y1="0" x2="66.6%" y2="100%"/>
+      <line x1="0" y1="33.3%" x2="100%" y2="33.3%"/><line x1="0" y1="66.6%" x2="100%" y2="66.6%"/></svg>`;
+  } else if (kind.startsWith('arrow')) {
+    const map = { arrow_left:['←','left:16px;top:45%'], arrow_right:['→','right:16px;top:45%'],
+                  arrow_closer:['↓','left:46%;bottom:16px'], arrow_back:['↑','left:46%;top:16px'] };
+    const [ch, pos] = map[kind];
+    overlayEl.innerHTML = `<div class="arrow" style="${pos}">${ch}</div>`;
+  }
+  setTimeout(() => overlayEl.innerHTML = '', 10000); // 疊層 10 秒後清除
+}
+
+/* ───────────── 9. 雜項 ───────────── */
+function setStatus(s) { document.getElementById('status').textContent = s; }
+document.getElementById('export').onclick = () => {
+  const blob = new Blob([JSON.stringify(log, null, 2)], { type: 'application/json' });
+  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: 'mirror_passport_log.json' });
+  a.click();
+};
+</script>
+</body>
+</html>

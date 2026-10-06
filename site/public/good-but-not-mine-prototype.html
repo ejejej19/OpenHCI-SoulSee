@@ -1,0 +1,1221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Good, But Not Mine</title>
+<style>
+  :root {
+    --paper: #fbfaf6;
+    --ink: #1f2423;
+    --muted: #64706d;
+    --line: #d8ddd7;
+    --panel: #ffffff;
+    --teal: #0f766e;
+    --teal-soft: #d9f0eb;
+    --rust: #b6462d;
+    --rust-soft: #f8ddd4;
+    --gold: #d8a423;
+    --violet: #5b5aa8;
+    --shadow: 0 18px 45px rgba(31, 36, 35, 0.11);
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    color: var(--ink);
+    background:
+      linear-gradient(90deg, rgba(15, 118, 110, 0.08) 0 1px, transparent 1px 100%),
+      linear-gradient(0deg, rgba(182, 70, 45, 0.06) 0 1px, transparent 1px 100%),
+      var(--paper);
+    background-size: 34px 34px;
+  }
+
+  button,
+  textarea,
+  input {
+    font: inherit;
+  }
+
+  button {
+    border: 0;
+    cursor: pointer;
+  }
+
+  .app {
+    min-height: 100vh;
+    display: grid;
+    grid-template-rows: auto 1fr;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 18px clamp(16px, 4vw, 48px);
+    border-bottom: 1px solid var(--line);
+    background: rgba(251, 250, 246, 0.92);
+    backdrop-filter: blur(12px);
+    position: sticky;
+    top: 0;
+    z-index: 5;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .mark {
+    width: 38px;
+    height: 38px;
+    border: 2px solid var(--ink);
+    display: grid;
+    place-items: center;
+    background: var(--panel);
+    box-shadow: 4px 4px 0 var(--teal-soft);
+    flex: 0 0 auto;
+  }
+
+  .mark span {
+    width: 18px;
+    height: 18px;
+    border-left: 3px solid var(--rust);
+    border-bottom: 3px solid var(--rust);
+    transform: rotate(-45deg);
+    display: block;
+  }
+
+  .brand-title {
+    font-weight: 800;
+    font-size: 18px;
+    line-height: 1.1;
+    white-space: nowrap;
+  }
+
+  .brand-sub {
+    color: var(--muted);
+    font-size: 12px;
+    margin-top: 2px;
+  }
+
+  .stepbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--muted);
+    font-size: 13px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #c6ccc7;
+  }
+
+  .dot.active {
+    background: var(--teal);
+  }
+
+  main {
+    width: min(1180px, calc(100% - 32px));
+    margin: 0 auto;
+    padding: clamp(24px, 5vw, 56px) 0;
+  }
+
+  .screen {
+    display: none;
+  }
+
+  .screen.active {
+    display: block;
+  }
+
+  .workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 380px);
+    gap: clamp(20px, 4vw, 42px);
+    align-items: start;
+  }
+
+  .hero-copy {
+    max-width: 680px;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: clamp(42px, 7vw, 78px);
+    line-height: 0.98;
+    letter-spacing: 0;
+  }
+
+  h2 {
+    margin: 0;
+    font-size: clamp(28px, 4vw, 48px);
+    line-height: 1.05;
+    letter-spacing: 0;
+  }
+
+  h3 {
+    margin: 0 0 12px;
+    font-size: 18px;
+    line-height: 1.2;
+  }
+
+  p {
+    line-height: 1.6;
+  }
+
+  .lead {
+    color: var(--muted);
+    font-size: clamp(18px, 2vw, 23px);
+    max-width: 660px;
+    margin: 22px 0 0;
+  }
+
+  .panel,
+  .receipt,
+  .draft-panel,
+  .task-option,
+  .metric-row {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+  }
+
+  .panel {
+    padding: clamp(18px, 3vw, 28px);
+    box-shadow: var(--shadow);
+  }
+
+  .aside-note {
+    background: var(--ink);
+    color: #f6f4ed;
+    padding: 24px;
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+  }
+
+  .aside-note strong {
+    color: #ffffff;
+  }
+
+  .aside-note p {
+    color: #d6ddd9;
+    margin-bottom: 0;
+  }
+
+  .actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 28px;
+  }
+
+  .primary,
+  .secondary,
+  .danger,
+  .ghost {
+    min-height: 44px;
+    padding: 0 18px;
+    border-radius: 6px;
+    font-weight: 750;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .primary {
+    background: var(--teal);
+    color: #ffffff;
+  }
+
+  .secondary {
+    background: var(--teal-soft);
+    color: #0c4f49;
+  }
+
+  .danger {
+    background: var(--rust);
+    color: #ffffff;
+  }
+
+  .ghost {
+    background: transparent;
+    color: var(--ink);
+    border: 1px solid var(--line);
+  }
+
+  .grid-options {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    margin-top: 26px;
+  }
+
+  .task-option {
+    padding: 18px;
+    text-align: left;
+    min-height: 144px;
+    display: grid;
+    align-content: start;
+    gap: 8px;
+    transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+  }
+
+  .task-option:hover,
+  .task-option.selected {
+    transform: translateY(-2px);
+    border-color: var(--teal);
+    box-shadow: 0 10px 24px rgba(15, 118, 110, 0.15);
+  }
+
+  .task-option span {
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.45;
+  }
+
+  .label {
+    display: block;
+    color: var(--muted);
+    font-weight: 750;
+    font-size: 13px;
+    margin: 0 0 9px;
+  }
+
+  textarea,
+  input[type="text"] {
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fffefa;
+    color: var(--ink);
+    padding: 14px 16px;
+    line-height: 1.5;
+    resize: vertical;
+    min-height: 120px;
+    outline: none;
+  }
+
+  input[type="text"] {
+    min-height: 48px;
+  }
+
+  textarea:focus,
+  input[type="text"]:focus {
+    border-color: var(--teal);
+    box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.12);
+  }
+
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 9px;
+    margin-top: 14px;
+  }
+
+  .chip {
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: #ffffff;
+    color: var(--ink);
+    padding: 8px 12px;
+    min-height: 36px;
+    font-size: 14px;
+  }
+
+  .chip.selected {
+    background: var(--teal-soft);
+    border-color: var(--teal);
+    color: #0c4f49;
+  }
+
+  .chip.risk.selected {
+    background: var(--rust-soft);
+    border-color: var(--rust);
+    color: #7a2c1e;
+  }
+
+  .pause-stage {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 360px);
+    gap: 24px;
+    align-items: stretch;
+  }
+
+  .lamp {
+    min-height: 360px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background:
+      radial-gradient(circle at 50% 36%, rgba(216, 164, 35, 0.35), transparent 26%),
+      radial-gradient(circle at 50% 46%, rgba(15, 118, 110, 0.18), transparent 42%),
+      #fffdfa;
+    display: grid;
+    place-items: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .lamp::before {
+    content: "";
+    width: 154px;
+    height: 154px;
+    border: 2px solid rgba(31, 36, 35, 0.26);
+    border-radius: 50%;
+    animation: breathe 2.8s ease-in-out infinite;
+  }
+
+  .lamp::after {
+    content: "This pause is yours";
+    position: absolute;
+    bottom: 26px;
+    color: var(--muted);
+    font-weight: 750;
+  }
+
+  @keyframes breathe {
+    0%, 100% {
+      transform: scale(0.92);
+      opacity: 0.55;
+    }
+    50% {
+      transform: scale(1.06);
+      opacity: 1;
+    }
+  }
+
+  .intent-strip {
+    border-left: 5px solid var(--teal);
+    background: #f3fbf8;
+    padding: 14px 16px;
+    margin: 18px 0;
+    border-radius: 6px;
+    color: #153f3b;
+  }
+
+  .review-grid {
+    display: grid;
+    grid-template-columns: minmax(230px, 0.8fr) minmax(0, 1.4fr) minmax(220px, 0.8fr);
+    gap: 14px;
+    margin-top: 24px;
+  }
+
+  .draft-panel {
+    padding: 18px;
+    min-height: 280px;
+  }
+
+  .draft-panel p {
+    margin: 0;
+  }
+
+  .draft-text {
+    font-size: 16px;
+    line-height: 1.7;
+  }
+
+  .highlight {
+    background: linear-gradient(180deg, transparent 52%, rgba(216, 164, 35, 0.38) 52%);
+  }
+
+  .choice-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 18px;
+  }
+
+  .choice-row.two {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .choice-btn {
+    min-height: 54px;
+    padding: 12px;
+    border-radius: 6px;
+    background: #ffffff;
+    border: 1px solid var(--line);
+    color: var(--ink);
+    font-weight: 750;
+  }
+
+  .choice-btn.selected {
+    background: var(--teal-soft);
+    border-color: var(--teal);
+    color: #0c4f49;
+  }
+
+  .choice-btn.strong.selected {
+    background: var(--rust-soft);
+    border-color: var(--rust);
+    color: #7a2c1e;
+  }
+
+  .receipt {
+    padding: 22px;
+    border-left: 6px solid var(--teal);
+    box-shadow: 8px 8px 0 rgba(216, 164, 35, 0.23);
+  }
+
+  .receipt-row {
+    border-bottom: 1px solid var(--line);
+    padding: 12px 0;
+  }
+
+  .receipt-row:last-child {
+    border-bottom: 0;
+  }
+
+  .receipt-row strong {
+    display: block;
+    color: var(--muted);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0;
+    margin-bottom: 5px;
+  }
+
+  .survey {
+    display: grid;
+    gap: 12px;
+    margin-top: 20px;
+  }
+
+  .metric-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(120px, 240px);
+    gap: 14px;
+    align-items: center;
+    padding: 14px;
+  }
+
+  .scale {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+  }
+
+  .scale button {
+    aspect-ratio: 1;
+    min-width: 28px;
+    border-radius: 5px;
+    background: #f0f1ee;
+    color: var(--ink);
+  }
+
+  .scale button.selected {
+    background: var(--violet);
+    color: #ffffff;
+  }
+
+  .small-note {
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .state-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .state-table th,
+  .state-table td {
+    text-align: left;
+    padding: 13px 14px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+
+  .state-table th {
+    background: #f0f4f2;
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .state-table tr:last-child td {
+    border-bottom: 0;
+  }
+
+  @media (max-width: 860px) {
+    header {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .stepbar {
+      justify-content: flex-start;
+    }
+
+    .workspace,
+    .pause-stage,
+    .review-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .grid-options,
+    .choice-row,
+    .choice-row.two {
+      grid-template-columns: 1fr;
+    }
+
+    .metric-row {
+      grid-template-columns: 1fr;
+    }
+
+    .brand-title {
+      white-space: normal;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand">
+      <div class="mark" aria-hidden="true"><span></span></div>
+      <div>
+        <div class="brand-title">Good, But Not Mine</div>
+        <div class="brand-sub">Authorship Pause prototype</div>
+      </div>
+    </div>
+    <div class="stepbar" id="stepbar" aria-label="Progress"></div>
+  </header>
+
+  <main>
+    <section class="screen active" data-screen="0">
+      <div class="workspace">
+        <div class="hero-copy">
+          <h1>AI can finish your work before it feels like yours.</h1>
+          <p class="lead">Try a short authorship pause. Protect one intent, watch what AI changes, and reclaim the part you would actually sign.</p>
+          <div class="actions">
+            <button class="primary" data-next>Start</button>
+            <button class="ghost" data-jump="8">View receipt sample</button>
+          </div>
+        </div>
+        <aside class="aside-note">
+          <strong>Prototype premise</strong>
+          <p>This demo uses scripted AI outputs so the mismatch stays controlled. The point is not model quality. The point is whether the interaction keeps your authorship visible.</p>
+        </aside>
+      </div>
+    </section>
+
+    <section class="screen" data-screen="1">
+      <div class="panel">
+        <h2>Pick something that could carry your name.</h2>
+        <p class="lead">The stronger the personal stake, the easier it is to feel the difference.</p>
+        <div class="grid-options" id="taskOptions"></div>
+        <div class="actions">
+          <button class="primary" data-next>Continue</button>
+          <button class="ghost" data-prev>Back</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="screen" data-screen="2">
+      <div class="workspace">
+        <div class="panel">
+          <h2>Ask AI to draft it.</h2>
+          <p class="small-note" id="taskPrompt"></p>
+          <label class="label" for="promptInput">Prompt you would normally give an AI tool</label>
+          <textarea id="promptInput"></textarea>
+          <div class="actions">
+            <button class="primary" data-next>Continue</button>
+            <button class="ghost" data-prev>Back</button>
+          </div>
+        </div>
+        <aside class="aside-note">
+          <strong>Normal AI rhythm</strong>
+          <p>This screen should feel ordinary. The authorship intervention begins before the draft appears.</p>
+        </aside>
+      </div>
+    </section>
+
+    <section class="screen" data-screen="3">
+      <div class="panel">
+        <h2>Before AI answers, protect one thing.</h2>
+        <p class="lead">No matter what AI gives me, this output must still...</p>
+        <label class="label" for="anchorInput">Intent anchor</label>
+        <input id="anchorInput" type="text" placeholder="sound uncertain but curious">
+        <div class="chips" id="anchorChips"></div>
+        <h3 style="margin-top:24px">Which part of authorship matters most here?</h3>
+        <div class="choice-row two" id="stakeChoices">
+          <button class="choice-btn" data-stake="voice">Voice</button>
+          <button class="choice-btn" data-stake="uncertainty">Uncertainty</button>
+          <button class="choice-btn" data-stake="evidence">Evidence</button>
+          <button class="choice-btn strong" data-stake="responsibility">Responsibility</button>
+        </div>
+        <div class="actions">
+          <button class="primary" data-next>Generate</button>
+          <button class="secondary" id="skipAnchor">Skip</button>
+          <button class="ghost" data-prev>Back</button>
+        </div>
+        <p class="small-note">If you skip, there will be less of your intent to compare later.</p>
+      </div>
+    </section>
+
+    <section class="screen" data-screen="4">
+      <div class="pause-stage">
+        <div class="panel">
+          <h2>AI is drafting. This pause is yours.</h2>
+          <p class="lead">This is not AI thinking harder. It is time to keep your intent nearby.</p>
+          <div class="intent-strip" id="pauseIntent"></div>
+          <h3>What might AI accidentally smooth away?</h3>
+          <div class="chips" id="riskChips"></div>
+          <div class="actions">
+            <button class="primary" data-next>Show draft</button>
+            <button class="secondary" id="moreTime">Need more time</button>
+            <button class="ghost" data-next>Skip pause</button>
+          </div>
+          <p class="small-note" id="pauseTimer">Prototype pause: 8 seconds, shortened for sketching.</p>
+        </div>
+        <div class="lamp" aria-label="Warm authorship pause animation"></div>
+      </div>
+    </section>
+
+    <section class="screen" data-screen="5">
+      <div class="panel">
+        <h2>Did AI keep what mattered?</h2>
+        <div class="review-grid">
+          <div class="draft-panel">
+            <h3>Your intent</h3>
+            <p id="reviewIntent" class="draft-text"></p>
+          </div>
+          <div class="draft-panel">
+            <h3>AI draft</h3>
+            <p id="draftText" class="draft-text"></p>
+          </div>
+          <div class="draft-panel">
+            <h3>Risk to watch</h3>
+            <p id="reviewRisk" class="draft-text"></p>
+          </div>
+        </div>
+
+        <h3 style="margin-top:24px">Did AI preserve, bend, or ignore your intent?</h3>
+        <div class="choice-row" id="preserveChoices">
+          <button class="choice-btn" data-choice="preserved">Preserved</button>
+          <button class="choice-btn" data-choice="bent">Bent</button>
+          <button class="choice-btn" data-choice="ignored">Ignored</button>
+        </div>
+
+        <h3 style="margin-top:24px">Would you call this yours?</h3>
+        <div class="choice-row two" id="mineChoices">
+          <button class="choice-btn" data-choice="mine">This is mine</button>
+          <button class="choice-btn strong" data-choice="not_mine">Good, but not mine</button>
+        </div>
+
+        <div class="actions">
+          <button class="primary" data-next>Continue</button>
+          <button class="ghost" data-prev>Back</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="screen" data-screen="6">
+      <div class="workspace">
+        <div class="panel">
+          <h2>What did AI smooth away?</h2>
+          <p class="lead">Select one reason, then name the assumption.</p>
+          <div class="chips" id="lostChips"></div>
+          <label class="label" for="assumptionInput" style="margin-top:22px">AI assumed...</label>
+          <textarea id="assumptionInput" placeholder="AI assumed I wanted to sound more certain than I am."></textarea>
+          <div class="actions">
+            <button class="primary" data-next>Reclaim it</button>
+            <button class="ghost" data-prev>Back</button>
+          </div>
+        </div>
+        <aside class="aside-note">
+          <strong>Current draft phrase</strong>
+          <p id="targetPhrase"></p>
+        </aside>
+      </div>
+    </section>
+
+    <section class="screen" data-screen="7">
+      <div class="panel">
+        <h2>Put one trace of yourself back.</h2>
+        <p class="lead">Change the smallest part that would make this yours again.</p>
+        <label class="label" for="editInput">Reclaim edit</label>
+        <textarea id="editInput"></textarea>
+        <h3 style="margin-top:20px">What kind of reclaim move is this?</h3>
+        <div class="chips" id="reclaimVerbs"></div>
+        <div class="chips" id="editSuggestions"></div>
+        <label class="label" for="responsibilityInput" style="margin-top:22px">What would you still check before signing?</label>
+        <textarea id="responsibilityInput"></textarea>
+        <div class="actions">
+          <button class="primary" data-next>Finish</button>
+          <button class="ghost" data-prev>Back</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="screen" data-screen="8">
+      <div class="workspace">
+        <div>
+          <h2>Your authorship stayed visible.</h2>
+          <p class="lead">Not because you typed the most words. Because you made the intent, objection, and repair traceable.</p>
+          <div class="receipt" id="receipt"></div>
+          <div class="actions">
+            <button class="primary" data-next>Answer reflection</button>
+            <button class="secondary" id="restart">Start over</button>
+          </div>
+        </div>
+        <aside class="aside-note">
+          <strong>Would you sign it now?</strong>
+          <div class="choice-row" style="grid-template-columns:1fr; margin-top:18px" id="signChoices">
+            <button class="choice-btn" data-choice="yes">Yes</button>
+            <button class="choice-btn" data-choice="almost">Almost</button>
+            <button class="choice-btn strong" data-choice="not_yet">Not yet</button>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="screen" data-screen="9">
+      <div class="panel">
+        <h2>Reflection</h2>
+        <p class="lead">Use this as a pilot survey. One is strongly disagree, seven is strongly agree.</p>
+        <div class="survey" id="survey"></div>
+        <label class="label" for="openReflection" style="margin-top:22px">What changed between the AI draft and the version you would sign?</label>
+        <textarea id="openReflection"></textarea>
+        <div class="actions">
+          <button class="primary" data-next>Show session summary</button>
+          <button class="ghost" data-prev>Back</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="screen" data-screen="10">
+      <div class="panel">
+        <h2>Session summary</h2>
+        <p class="lead">This is the quick data row a pilot observer could copy into the evidence table.</p>
+        <table class="state-table" id="summaryTable"></table>
+        <div class="actions">
+          <button class="primary" id="restart2">Run again</button>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+  const screens = Array.from(document.querySelectorAll(".screen"));
+  const stepbar = document.getElementById("stepbar");
+
+  const state = {
+    screen: 0,
+    task: "self_intro",
+    prompt: "",
+    anchor: "",
+    anchorSkipped: false,
+    stake: "",
+    risk: "",
+    outputId: "",
+    preserveChoice: "",
+    mineChoice: "",
+    lost: "",
+    assumption: "",
+    edit: "",
+    reclaimVerb: "",
+    responsibility: "",
+    sign: "",
+    survey: {}
+  };
+
+  const tasks = {
+    self_intro: {
+      title: "Workshop self-introduction",
+      summary: "Personal voice, public profile, easy to judge whether it sounds like you.",
+      prompt: "You are writing a 120-word self-introduction for an HCI workshop profile. It will be shown to classmates and mentors.",
+      defaultPrompt: "Draft a short self-introduction for my HCI workshop profile. Make it sound thoughtful and friendly.",
+      anchors: ["sound like me", "include a real detail", "keep uncertainty", "not become generic"],
+      outputs: [
+        {
+          id: "self_generic",
+          text: "I am a curious interdisciplinary student interested in human-centered technology, design research, and the social impact of AI. I enjoy turning abstract questions into tangible prototypes and using research to understand how people interact with emerging technologies. In this workshop, I hope to explore how AI can support creativity, reflection, and meaningful human-machine collaboration. I am especially interested in designing tools that help people feel empowered, thoughtful, and connected in an increasingly AI-mediated world.",
+          target: "curious interdisciplinary student",
+          assumption: "AI assumed a workshop profile should sound confident and broadly impressive.",
+          suggestions: ["Add one concrete question you keep returning to.", "Replace broad HCI values with a real project habit.", "Add: I am still figuring out..."]
+        },
+        {
+          id: "self_overconfident",
+          text: "I am a designer and researcher focused on building responsible AI experiences that protect human agency. My work combines UX research, prototyping, and critical reflection to examine how emerging technologies shape identity and decision-making. I believe HCI offers a powerful way to make invisible social and psychological effects visible through design. In this workshop, I want to create work that challenges passive AI use and helps people build healthier relationships with intelligent systems.",
+          target: "focused on building responsible AI experiences",
+          assumption: "AI assumed the user already has a stable professional identity.",
+          suggestions: ["Change My work combines to I am trying to learn how to combine.", "Add a sentence that admits uncertainty.", "Replace healthier relationships with a concrete behavior."]
+        },
+        {
+          id: "self_poetic",
+          text: "I am someone who loves asking how technology changes the way people see themselves and each other. Through design, research, and small experiments, I hope to create experiences that help people pause, reflect, and reconnect with their own judgment. I am excited to join this workshop because it gives me a space to explore AI not only as a tool, but as a mirror for identity, creativity, and responsibility.",
+          target: "mirror for identity, creativity, and responsibility",
+          assumption: "AI assumed a poetic tone would feel personal.",
+          suggestions: ["Remove the broad triad.", "Add one actual class, frustration, or sketch.", "Make the sentence smaller and more direct."]
+        }
+      ]
+    },
+    p6: {
+      title: "P6 project paragraph",
+      summary: "Project framing, advisor-facing, good for team pilot sessions.",
+      prompt: "Your team is proposing an HCI project about AI and identity. Write a 120-word problem statement for the proposal.",
+      defaultPrompt: "Draft a concise problem statement for our HCI project about AI, identity, and human agency.",
+      anchors: ["focus on good but not mine", "avoid overclaiming", "mention authorship moment", "stay concrete"],
+      outputs: [
+        {
+          id: "p6_generic",
+          text: "As generative AI becomes increasingly integrated into learning, work, and creative practice, users are gaining efficiency but may also lose awareness of their own agency. AI systems often provide fluent answers that appear complete, making it easy for users to accept suggestions without reflection. This project explores how interaction design can help users maintain ownership and control when collaborating with AI. By designing an ambient intervention during AI generation, we aim to support reflection, reduce overreliance, and encourage users to actively evaluate AI outputs before adopting them as their own.",
+          target: "reduce overreliance",
+          assumption: "AI assumed broad academic language is safer than a concrete human moment.",
+          suggestions: ["Start with: AI drafts can become polished before they feel like ours.", "Replace ambient intervention with authorship pause.", "Name the moment when output looks complete too early."]
+        },
+        {
+          id: "p6_solution",
+          text: "Our project proposes an authorship pause that helps users stay reflective while AI generates creative outputs. Through intent anchoring, ambient cues, and authorship receipts, the system reduces passive acceptance and preserves a sense of agency. This approach transforms waiting time into a productive moment for reflection, allowing users to compare AI drafts against their original goals and reclaim ownership before finalizing the work.",
+          target: "reduces passive acceptance and preserves a sense of agency",
+          assumption: "AI assumed the prototype already works.",
+          suggestions: ["Change reduces to explores whether.", "Change productive moment to authorship moment.", "Add: sounds finished before it feels mine."]
+        },
+        {
+          id: "p6_theory",
+          text: "This project investigates how generative AI reshapes the boundaries of authorship, agency, and responsibility in human-computer interaction. As AI systems increasingly mediate creative and intellectual labor, users may struggle to distinguish their own contributions from machine-generated influence. We examine how design can surface these invisible boundaries and help people develop more reflective relationships with AI-assisted work.",
+          target: "surface these invisible boundaries",
+          assumption: "AI assumed conceptual sophistication matters more than prototype clarity.",
+          suggestions: ["Add prompt, intent anchor, pause, compare, reclaim.", "Replace invisible boundaries with what AI smoothed away.", "Use the phrase good, but not mine."]
+        }
+      ]
+    }
+  };
+
+  const taskOrder = ["self_intro", "p6"];
+  const riskChips = ["too generic", "too confident", "too polished", "wrong tone", "missing personal detail", "not defensible", "too professional", "too dramatic", "too safe", "not specific enough"];
+  const lostChips = ["my voice", "uncertainty", "personal detail", "roughness", "values", "context", "responsibility", "originality", "audience", "boundary"];
+  const reclaimVerbs = ["soften", "ground", "specify", "personalize", "remove", "reframe"];
+  const surveyItems = [
+    "This output feels like mine.",
+    "I can point to what I contributed.",
+    "I would put my name on this.",
+    "I noticed an assumption AI made.",
+    "I felt able to reject or redirect AI.",
+    "I know what I am still responsible for.",
+    "The pause helped me read the output differently.",
+    "The extra steps felt worthwhile.",
+    "The extra steps felt annoying.",
+    "I feel capable of doing a similar task without AI."
+  ];
+
+  function renderStepbar() {
+    stepbar.innerHTML = "";
+    for (let i = 0; i < screens.length; i += 1) {
+      const dot = document.createElement("span");
+      dot.className = "dot" + (i === state.screen ? " active" : "");
+      stepbar.appendChild(dot);
+    }
+    const label = document.createElement("span");
+    label.textContent = "Step " + (state.screen + 1) + " of " + screens.length;
+    stepbar.appendChild(label);
+  }
+
+  function showScreen(index) {
+    state.screen = Math.max(0, Math.min(index, screens.length - 1));
+    screens.forEach((screen, i) => screen.classList.toggle("active", i === state.screen));
+    hydrateScreen();
+    renderStepbar();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function selectedTask() {
+    return tasks[state.task];
+  }
+
+  function selectedOutput() {
+    const task = selectedTask();
+    return task.outputs.find(item => item.id === state.outputId) || task.outputs[0];
+  }
+
+  function pickOutput() {
+    const task = selectedTask();
+    const anchor = state.anchor.toLowerCase();
+    const risk = state.risk.toLowerCase();
+    const stake = state.stake.toLowerCase();
+    let index = 0;
+
+    if (anchor.includes("uncertain") || anchor.includes("overclaim") || risk.includes("confident") || risk.includes("defensible") || stake.includes("uncertainty") || stake.includes("evidence") || stake.includes("responsibility")) {
+      index = 1;
+    } else if (anchor.includes("concrete") || anchor.includes("specific") || risk.includes("specific")) {
+      index = 2;
+    }
+
+    state.outputId = task.outputs[index] ? task.outputs[index].id : task.outputs[0].id;
+  }
+
+  function renderTasks() {
+    const wrap = document.getElementById("taskOptions");
+    wrap.innerHTML = "";
+    taskOrder.forEach(key => {
+      const task = tasks[key];
+      const button = document.createElement("button");
+      button.className = "task-option" + (state.task === key ? " selected" : "");
+      button.innerHTML = "<strong>" + task.title + "</strong><span>" + task.summary + "</span>";
+      button.addEventListener("click", () => {
+        state.task = key;
+        state.prompt = task.defaultPrompt;
+        document.getElementById("promptInput").value = state.prompt;
+        renderTasks();
+      });
+      wrap.appendChild(button);
+    });
+  }
+
+  function renderChips(containerId, values, selected, onSelect, extraClass) {
+    const wrap = document.getElementById(containerId);
+    wrap.innerHTML = "";
+    values.forEach(value => {
+      const button = document.createElement("button");
+      button.className = "chip " + (extraClass || "") + (selected === value ? " selected" : "");
+      button.textContent = value;
+      button.addEventListener("click", () => onSelect(value));
+      wrap.appendChild(button);
+    });
+  }
+
+  function renderRiskChips() {
+    renderChips("riskChips", riskChips, state.risk, value => {
+      state.risk = value;
+      renderRiskChips();
+    }, "risk");
+  }
+
+  function renderLostChips() {
+    renderChips("lostChips", lostChips, state.lost, value => {
+      state.lost = value;
+      renderLostChips();
+    });
+  }
+
+  function renderReclaimVerbs() {
+    renderChips("reclaimVerbs", reclaimVerbs, state.reclaimVerb, value => {
+      state.reclaimVerb = value;
+      renderReclaimVerbs();
+    });
+  }
+
+  function highlightText(text, phrase) {
+    if (!phrase || !text.includes(phrase)) return text;
+    return text.replace(phrase, "<span class=\"highlight\">" + phrase + "</span>");
+  }
+
+  function renderReceipt() {
+    const output = selectedOutput();
+    const receipt = document.getElementById("receipt");
+    const anchor = state.anchor || "No anchor captured";
+    const risk = state.risk || "No risk selected";
+    const assumption = state.assumption || output.assumption;
+    const edit = state.edit || "No reclaim edit yet";
+    const stake = state.stake || "No authorship stake selected";
+    const reclaimVerb = state.reclaimVerb || "No reclaim move labeled";
+    const responsibility = state.responsibility || "No responsibility note yet";
+    receipt.innerHTML = [
+      ["You protected", anchor],
+      ["Authorship stake", stake],
+      ["AI added", output.target],
+      ["You questioned", risk + ". " + assumption],
+      ["You reclaimed", reclaimVerb + ": " + edit],
+      ["Still responsible for", responsibility],
+      ["Would you sign it?", state.sign || "Not answered yet"]
+    ].map(row => "<div class=\"receipt-row\"><strong>" + row[0] + "</strong><div>" + row[1] + "</div></div>").join("");
+  }
+
+  function renderSurvey() {
+    const survey = document.getElementById("survey");
+    survey.innerHTML = "";
+    surveyItems.forEach((item, idx) => {
+      const row = document.createElement("div");
+      row.className = "metric-row";
+      const label = document.createElement("div");
+      label.textContent = item;
+      const scale = document.createElement("div");
+      scale.className = "scale";
+      for (let score = 1; score <= 7; score += 1) {
+        const button = document.createElement("button");
+        button.textContent = score;
+        button.className = state.survey[idx] === score ? "selected" : "";
+        button.addEventListener("click", () => {
+          state.survey[idx] = score;
+          renderSurvey();
+        });
+        scale.appendChild(button);
+      }
+      row.appendChild(label);
+      row.appendChild(scale);
+      survey.appendChild(row);
+    });
+  }
+
+  function renderSummary() {
+    const output = selectedOutput();
+    const rows = [
+      ["Condition", "Authorship Pause"],
+      ["Task", selectedTask().title],
+      ["Intent anchor", state.anchor || "Skipped"],
+      ["Authorship stake", state.stake || "Not selected"],
+      ["Risk chip", state.risk || "None"],
+      ["AI output", output.id],
+      ["Mine choice", state.mineChoice || "Not answered"],
+      ["Mismatch", state.lost || "Not marked"],
+      ["AI assumption", state.assumption || output.assumption],
+      ["Reclaim move", state.reclaimVerb || "Not labeled"],
+      ["Reclaim edit", state.edit || "None"],
+      ["Still responsible for", state.responsibility || "Not answered"],
+      ["Sign choice", state.sign || "Not answered"],
+      ["Ownership rating", state.survey[0] || "Not answered"],
+      ["Open reflection", document.getElementById("openReflection").value || "Not answered"]
+    ];
+    document.getElementById("summaryTable").innerHTML = rows.map(row => "<tr><th>" + row[0] + "</th><td>" + row[1] + "</td></tr>").join("");
+  }
+
+  function hydrateScreen() {
+    if (state.screen === 1) renderTasks();
+    if (state.screen === 2) {
+      document.getElementById("taskPrompt").textContent = selectedTask().prompt;
+      document.getElementById("promptInput").value = state.prompt || selectedTask().defaultPrompt;
+    }
+    if (state.screen === 3) {
+      renderChips("anchorChips", selectedTask().anchors, "", value => {
+        state.anchor = value;
+        state.anchorSkipped = false;
+        document.getElementById("anchorInput").value = value;
+      });
+      document.getElementById("anchorInput").value = state.anchor;
+      document.querySelectorAll("#stakeChoices .choice-btn").forEach(btn => btn.classList.toggle("selected", btn.dataset.stake === state.stake));
+    }
+    if (state.screen === 4) {
+      document.getElementById("pauseIntent").textContent = "You protected: " + (state.anchor || "No anchor captured") + " | Authorship stake: " + (state.stake || "not selected");
+      renderRiskChips();
+    }
+    if (state.screen === 5) {
+      if (!state.outputId) pickOutput();
+      const output = selectedOutput();
+      document.getElementById("reviewIntent").textContent = state.anchor || "No anchor captured";
+      document.getElementById("reviewRisk").textContent = state.risk || "No risk selected";
+      document.getElementById("draftText").innerHTML = highlightText(output.text, output.target);
+    }
+    if (state.screen === 6) {
+      const output = selectedOutput();
+      document.getElementById("targetPhrase").textContent = output.target;
+      document.getElementById("assumptionInput").value = state.assumption || output.assumption;
+      renderLostChips();
+    }
+    if (state.screen === 7) {
+      const output = selectedOutput();
+      document.getElementById("editInput").value = state.edit || output.suggestions[0];
+      renderChips("editSuggestions", output.suggestions, "", value => {
+        state.edit = value;
+        document.getElementById("editInput").value = value;
+      });
+      renderReclaimVerbs();
+      document.getElementById("responsibilityInput").value = state.responsibility || "Whether this claim is defensible and still sounds like our team.";
+    }
+    if (state.screen === 8) renderReceipt();
+    if (state.screen === 9) renderSurvey();
+    if (state.screen === 10) renderSummary();
+  }
+
+  document.body.addEventListener("click", event => {
+    const target = event.target.closest("button");
+    if (!target) return;
+
+    if (target.matches("[data-next]")) {
+      captureInputs();
+      if (state.screen === 4) pickOutput();
+      showScreen(state.screen + 1);
+    }
+
+    if (target.matches("[data-prev]")) {
+      captureInputs();
+      showScreen(state.screen - 1);
+    }
+
+    if (target.dataset.jump) {
+      captureInputs();
+      showScreen(Number(target.dataset.jump));
+    }
+  });
+
+  function captureInputs() {
+    const promptInput = document.getElementById("promptInput");
+    const anchorInput = document.getElementById("anchorInput");
+    const assumptionInput = document.getElementById("assumptionInput");
+    const editInput = document.getElementById("editInput");
+    const responsibilityInput = document.getElementById("responsibilityInput");
+    if (promptInput) state.prompt = promptInput.value;
+    if (anchorInput && !state.anchorSkipped) state.anchor = anchorInput.value;
+    if (assumptionInput) state.assumption = assumptionInput.value;
+    if (editInput) state.edit = editInput.value;
+    if (responsibilityInput) state.responsibility = responsibilityInput.value;
+  }
+
+  document.getElementById("skipAnchor").addEventListener("click", () => {
+    state.anchor = "";
+    state.anchorSkipped = true;
+    showScreen(4);
+  });
+
+  document.getElementById("moreTime").addEventListener("click", () => {
+    const timer = document.getElementById("pauseTimer");
+    timer.textContent = "Take another breath. Keep the protected intent nearby.";
+  });
+
+  document.getElementById("restart").addEventListener("click", () => window.location.reload());
+  document.getElementById("restart2").addEventListener("click", () => window.location.reload());
+
+  document.querySelectorAll("#preserveChoices .choice-btn").forEach(button => {
+    button.addEventListener("click", () => {
+      state.preserveChoice = button.dataset.choice;
+      document.querySelectorAll("#preserveChoices .choice-btn").forEach(btn => btn.classList.toggle("selected", btn === button));
+    });
+  });
+
+  document.querySelectorAll("#mineChoices .choice-btn").forEach(button => {
+    button.addEventListener("click", () => {
+      state.mineChoice = button.dataset.choice;
+      document.querySelectorAll("#mineChoices .choice-btn").forEach(btn => btn.classList.toggle("selected", btn === button));
+    });
+  });
+
+  document.querySelectorAll("#stakeChoices .choice-btn").forEach(button => {
+    button.addEventListener("click", () => {
+      state.stake = button.dataset.stake;
+      document.querySelectorAll("#stakeChoices .choice-btn").forEach(btn => btn.classList.toggle("selected", btn === button));
+    });
+  });
+
+  document.querySelectorAll("#signChoices .choice-btn").forEach(button => {
+    button.addEventListener("click", () => {
+      state.sign = button.dataset.choice;
+      document.querySelectorAll("#signChoices .choice-btn").forEach(btn => btn.classList.toggle("selected", btn === button));
+      renderReceipt();
+    });
+  });
+
+  showScreen(0);
+</script>
+</body>
+</html>

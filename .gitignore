@@ -1,0 +1,27 @@
+# Publish only the production site source by default.
+/*
+
+!/.gitignore
+!/README.md
+!/.github/
+/.github/*
+!/.github/CODEOWNERS
+!/site/
+!/site/**
+
+# Site project local/generated files
+site/node_modules/
+site/.wrangler/
+site/.dev.vars
+site/.env
+site/.env.*
+!site/.env.example
+!site/.dev.vars.example
+site/dist/
+site/build/
+site/coverage/
+
+# OS/editor noise
+.DS_Store
+*.swp
+*.swo

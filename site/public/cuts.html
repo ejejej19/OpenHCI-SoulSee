@@ -1,0 +1,1577 @@
+<!DOCTYPE html>
+<!--
+  /cuts — SoulSee 完整流程版
+  依照視覺部分鏡:開場 → ①選擇格式(1/2/4格) → ②生成幽靈(prompt) →
+  ③構圖·拍攝(連拍,每張倒數) → ⑤合成拍貼條下載。
+  功能與 prompt 與 /play 完全相同,共用 photobooth-engine.js;
+  流程層只透過引擎的 openhci:ghost / openhci:shot 事件接手畫面切換與連拍收集。
+-->
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>(AI)dentity — 拍貼機</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Space+Mono:wght@400;700&family=Noto+Serif+TC:wght@500;700;900&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --acid:#b0f000;
+    --acid-deep:#94cc00;
+    --blue:#1500ff;
+    --ink:#0a0a0a;
+    --paper:#ffffff;
+    --paper-2:#f1f1ee;
+    --paper-3:#e6e6e1;
+    --muted:#6c6c66;
+    --font-display:"Instrument Serif","Noto Serif TC",serif;
+    --font-cjk:"Noto Serif TC",serif;
+    --font-mono:"Space Mono","Noto Sans TC",monospace;
+    --font-body:"Noto Sans TC",sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--paper);height:100%}
+  body{font-family:var(--font-body);color:var(--ink);-webkit-font-smoothing:antialiased;overflow:hidden}
+
+  /* ---- 全螢幕畫面(依序出現) ---- */
+  .fs{position:fixed;inset:0;background:var(--paper);display:flex;flex-direction:column;max-width:520px;margin:0 auto;
+    padding:calc(16px + env(safe-area-inset-top)) 18px calc(16px + env(safe-area-inset-bottom))}
+  .fs[hidden]{display:none}
+  .fs-top{display:flex;align-items:center;justify-content:space-between;flex:none;margin-bottom:14px}
+  .app-logo{line-height:0;flex:0 0 auto}
+  .app-logo img{display:block;width:auto;height:24px}
+  .step{font-family:var(--font-mono);font-size:10px;letter-spacing:1.5px;color:var(--muted)}
+  .step b{color:var(--ink)}
+  .rec{font-family:var(--font-mono);font-size:10px;letter-spacing:1.5px;display:flex;align-items:center;gap:6px;color:var(--ink)}
+  .rec .dot{width:8px;height:8px;border-radius:50%;background:var(--blue);animation:blink 1.1s steps(1) infinite}
+  @keyframes blink{50%{opacity:.15}}
+
+  .pick-head .t{font-family:var(--font-cjk);font-weight:900;font-size:26px;line-height:1.1}
+  .pick-head .t b{color:var(--blue)}
+  .pick-head .s{font-size:12px;color:#555;margin-top:8px;line-height:1.5}
+
+  /* ① 格式選擇 */
+  .opts{display:flex;flex-direction:column;gap:12px;flex:1;justify-content:center}
+  .opt{display:flex;align-items:center;gap:16px;border:1.5px solid var(--ink);background:#fff;padding:14px;cursor:pointer;position:relative;transition:all .12s}
+  .opt.on{border-color:var(--blue);border-width:2px}
+  .opt.on::before{content:"";position:absolute;top:-6px;left:-6px;width:12px;height:12px;background:var(--acid)}
+  .opt.on .chk{opacity:1}
+  .opt .chk{position:absolute;top:12px;right:14px;font-family:var(--font-mono);font-weight:700;font-size:13px;color:var(--blue);opacity:0}
+  .mini{flex:0 0 52px;height:80px;background:var(--paper-2);border:1px solid var(--ink);overflow:hidden}
+  .mini img{display:block;width:100%;height:100%;object-fit:contain}
+  .opt .txt .nm{font-family:var(--font-cjk);font-weight:900;font-size:19px;line-height:1}
+  .opt .txt .rt{font-family:var(--font-mono);font-size:10px;color:var(--blue);letter-spacing:1px;margin-top:6px}
+  .opt .txt .ds{font-size:11px;color:#555;margin-top:4px;line-height:1.4}
+  .pick-btn{margin-top:14px;background:var(--acid);border:2px solid var(--ink);color:var(--ink);font-family:var(--font-cjk);font-weight:900;font-size:15px;padding:14px 0;text-align:center;cursor:pointer;min-height:50px}
+  .pick-btn:hover{background:var(--acid-deep)}
+
+  /* ② 生成幽靈 */
+  .prompt{position:relative;border:1.5px solid var(--blue);background:#fff;padding:10px 12px 11px;flex:none}
+  .prompt::before,.prompt::after{content:"";position:absolute;width:12px;height:12px;background:var(--acid)}
+  .prompt::before{top:-6px;left:-6px}
+  .prompt::after{bottom:-6px;right:-6px}
+  .prompt .plabel{font-family:var(--font-mono);font-size:9.5px;letter-spacing:2px;color:var(--blue);margin-bottom:5px;text-transform:uppercase}
+  #stylePrompt{width:100%;border:0;outline:none;resize:none;background:transparent;font-family:var(--font-cjk);font-weight:500;font-size:15px;color:var(--ink);line-height:1.35;min-height:44px;max-height:74px;padding-right:104px}
+  #stylePrompt::placeholder{color:#b8b8b2}
+  #summon{position:absolute;right:8px;bottom:8px;background:var(--acid);border:2px solid var(--ink);cursor:pointer;font-family:var(--font-cjk);font-weight:700;font-size:12px;letter-spacing:1px;padding:9px 12px;color:var(--ink);min-height:38px}
+  #summon:hover{background:var(--acid-deep)}
+  #summon:disabled{opacity:.45}
+  .gen-title{margin-bottom:12px}
+  .gen-title .t{font-family:var(--font-cjk);font-weight:900;font-size:26px;line-height:1.1}
+  .gen-title .t b{color:var(--blue)}
+  .gen-title .s{font-size:12px;color:#555;margin-top:8px;line-height:1.5}
+  #genStatus{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.5px;color:var(--muted);margin:12px 0 8px;min-height:16px}
+  #genStatus.done{color:var(--acid-deep)}
+  #genModel{font-family:var(--font-mono);font-size:8px;letter-spacing:.35px;color:#aaa9a3;margin:-5px 0 7px;min-height:10px}
+  #genModel[hidden]{display:none}
+  .gen-progress{height:9px;margin:0 0 10px;border:2px solid var(--ink);background:#fff;overflow:hidden;flex:none}
+  .gen-progress[hidden]{display:none}
+  .gen-progress i{display:block;width:38%;height:100%;background:var(--acid);animation:gen-progress 1.15s ease-in-out infinite}
+  .gen-progress.done i{width:100%;animation:none;transform:none;background:var(--acid-deep)}
+  .gen-progress.failed i{width:100%;animation:none;transform:none;background:#ff5a52}
+  @keyframes gen-progress{from{transform:translateX(-110%)}to{transform:translateX(290%)}}
+  .capture-slot{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#111}
+  .gen-preview{position:relative;flex:none;background:#111;overflow:hidden;display:flex;align-items:center;justify-content:center}
+  .gen-preview > #cam{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  .gen-preview img.is-front-camera{transform:scaleX(-1)}
+  .gen-preview img{position:relative;z-index:2;max-width:100%;max-height:100%;object-fit:contain;background:rgba(0,0,0,.55)}
+  .gtag{position:absolute;top:10px;left:10px;z-index:3;font-family:var(--font-mono);font-size:9px;letter-spacing:1px;background:var(--acid);color:var(--ink);padding:3px 8px;font-weight:700}
+  .gcap{position:absolute;bottom:10px;left:10px;z-index:3;font-family:var(--font-mono);font-size:9px;letter-spacing:.5px;color:#aaa}
+  #genReason{font-size:13px;font-family:var(--font-cjk);line-height:1.55;border-left:3px solid var(--acid);background:var(--paper-2);padding:9px 11px;margin-top:10px}
+  #genReason[hidden]{display:none}
+  .gen-actions{display:grid;grid-template-columns:2fr 1fr;gap:8px;margin-top:12px;flex:none}
+  .gbtn{border:2px solid var(--ink);font-family:var(--font-cjk);font-weight:900;font-size:15px;padding:13px 0;text-align:center;cursor:pointer;background:#fff;min-height:50px}
+  .gbtn.primary{background:var(--acid)}
+  .gbtn.primary:hover{background:var(--acid-deep)}
+  .gbtn:disabled{opacity:.4;cursor:default}
+  .skip-row{display:flex;justify-content:space-between;margin-top:10px}
+  .skip{font-family:var(--font-mono);font-size:10px;color:var(--muted);cursor:pointer;text-decoration:underline}
+
+  /* ③ 拍攝畫面 */
+  .app{display:flex;flex-direction:column;height:100vh;height:100dvh;max-width:520px;margin:0 auto;
+    padding:calc(12px + env(safe-area-inset-top)) 16px calc(12px + env(safe-area-inset-bottom));gap:10px}
+  #cutBar{display:flex;align-items:center;justify-content:space-between;flex:none}
+  #cutBar .l{font-family:var(--font-mono);font-size:10px;letter-spacing:1px}
+  #cutBar .l b{color:var(--blue)}
+  #cutBar .re{font-family:var(--font-mono);font-size:10px;color:var(--muted);cursor:pointer;border:1px solid var(--paper-3);padding:3px 7px}
+  #cutBar .re:hover{border-color:var(--ink);color:var(--ink)}
+  #chips{display:flex;gap:5px}
+  #chips i{width:16px;height:10px;background:var(--paper-3);border:1px solid var(--ink)}
+  #chips i.done{background:var(--acid)}
+
+  #stage{position:relative;flex:none;background:#111;overflow:hidden}
+  video{width:100%;height:100%;object-fit:cover;display:block}
+  video.is-front-camera,#ghost.is-front-camera{transform:scaleX(-1)}
+  #cameraEffect{position:absolute;inset:0;z-index:1;pointer-events:none}
+  #cameraEffect[data-effect="vignette"]{background:radial-gradient(circle at 50% 47%,transparent 28%,rgba(0,0,0,.04) 56%,rgba(0,0,0,.68) 100%)}
+  #cameraEffect[data-effect="glow"]{background:radial-gradient(circle at 18% 12%,rgba(255,236,203,.34),rgba(255,190,145,.13) 34%,transparent 72%);mix-blend-mode:screen}
+  #cameraEffect[data-effect="grain"]{background-image:radial-gradient(circle,rgba(255,255,255,.24) 0 .6px,transparent .8px),radial-gradient(circle,rgba(0,0,0,.2) 0 .7px,transparent .9px);background-position:0 0,2px 1px;background-size:4px 4px,5px 5px;mix-blend-mode:soft-light;opacity:.55}
+  #cameraEffect[data-effect="vhs"]{background-image:repeating-linear-gradient(to bottom,rgba(255,255,255,.025) 0 1px,rgba(0,0,0,.18) 1px 3px);mix-blend-mode:screen}
+  #cameraEffect[data-effect="neon"]{background:radial-gradient(circle at 8% 82%,rgba(0,229,255,.48),transparent 72%),radial-gradient(circle at 94% 16%,rgba(255,34,181,.5),transparent 72%);mix-blend-mode:screen}
+  #ghost{position:absolute;inset:0;z-index:2;width:100%;height:100%;object-fit:cover;opacity:.45;display:none;pointer-events:none}
+  #ghostSkeleton{position:absolute;inset:0;z-index:2;width:100%;height:100%;display:none;pointer-events:none}
+  #shotPreview{position:absolute;inset:0;z-index:5;width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
+  #shotPreview[hidden]{display:none}
+
+  .brk{position:absolute;z-index:6;pointer-events:none}
+  .brk i{position:absolute;background:var(--acid)}
+  .brk .h{width:26px;height:5px}.brk .v{width:5px;height:26px}.brk .px{width:9px;height:9px;background:var(--blue)}
+  .brk.tl{top:10px;left:10px}.brk.tl .h{top:0;left:0}.brk.tl .v{top:0;left:0}.brk.tl .px{top:11px;left:11px}
+  .brk.tr{top:10px;right:10px}.brk.tr .h{top:0;right:0}.brk.tr .v{top:0;right:0}.brk.tr .px{top:11px;right:11px}
+  .brk.bl{bottom:10px;left:10px}.brk.bl .h{bottom:0;left:0}.brk.bl .v{bottom:0;left:0}.brk.bl .px{bottom:11px;left:11px}
+  .brk.br{bottom:10px;right:10px}.brk.br .h{bottom:0;right:0}.brk.br .v{bottom:0;right:0}.brk.br .px{bottom:11px;right:11px}
+
+  .hud{position:absolute;top:9px;left:11px;z-index:7;font-family:var(--font-mono);font-size:9px;letter-spacing:1px;color:var(--acid);text-shadow:0 0 6px rgba(0,0,0,.7)}
+  .camera-switch{position:absolute;top:9px;right:11px;z-index:7;display:flex;gap:4px}
+  .camera-switch button{min-height:32px;padding:0 10px;border:1px solid var(--acid);background:rgba(0,0,0,.55);color:var(--acid);font-family:var(--font-mono);font-size:10px;letter-spacing:1px;cursor:pointer}
+  .camera-switch button[aria-pressed="true"]{background:var(--acid);color:#000}
+  .camera-switch button:disabled{opacity:.5}
+  #effectCycle{position:absolute;bottom:11px;left:50%;transform:translateX(-50%);z-index:7;width:auto;min-width:88px;height:36px;background:rgba(0,0,0,.55);border:1px solid var(--acid);color:var(--acid);font-family:var(--font-mono);font-size:11px;letter-spacing:1px;padding:8px 12px}
+  #spin{position:absolute;top:34px;left:11px;z-index:7;background:rgba(0,0,0,.72);border-left:2px solid var(--acid);color:#fff;font-family:var(--font-mono);font-size:10px;padding:7px 10px;display:none;max-width:70%}
+  #reason{flex:none;max-height:56px;overflow-y:auto;background:var(--paper-2);border-left:3px solid var(--acid);color:var(--ink);font-family:var(--font-cjk);font-weight:500;font-size:12px;line-height:1.45;padding:8px 10px;cursor:pointer}
+  #reason[hidden]{display:none}
+  .gen-overlay{position:absolute;inset:0;z-index:14;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:rgba(10,10,10,.78);padding:0 10%}
+  body.generating .gen-overlay{display:flex}
+  .gen-overlay .go-bar{width:100%;height:10px;border:2px solid var(--acid);background:rgba(0,0,0,.5);overflow:hidden}
+  .gen-overlay .go-bar i{display:block;width:38%;height:100%;background:var(--acid);animation:gen-progress 1.15s ease-in-out infinite}
+  .gen-overlay .go-text{font-family:var(--font-mono);font-size:11px;letter-spacing:1.5px;color:var(--acid);text-align:center}
+  #shotCompare{position:absolute;inset:0;z-index:11;display:grid;grid-template-columns:1fr 1fr;gap:2px;background:#000}
+  #shotCompare[hidden]{display:none}
+  .sc-pane{position:relative;min-width:0;overflow:hidden}
+  .sc-pane img{width:100%;height:100%;object-fit:cover}
+  .sc-pane span{position:absolute;left:0;bottom:0;font-family:var(--font-mono);font-size:9px;letter-spacing:1px;background:var(--ink);color:var(--acid);padding:3px 7px}
+  #scGhost.is-front-camera{transform:scaleX(-1)}
+  #countdown{position:absolute;top:46px;right:11px;z-index:8;display:none;pointer-events:none;background:rgba(0,0,0,.55);border:1px solid var(--acid);padding:4px 12px;min-width:58px;text-align:center}
+  #countdown[data-visible="true"]{display:block}
+  #countdown span{font-family:var(--font-display);font-size:40px;line-height:1.1;color:var(--acid);text-shadow:3px 3px 0 var(--blue);display:inline-block;animation:tick .9s ease-out}
+  @keyframes tick{from{opacity:.2;transform:scale(1.4)}to{opacity:1;transform:scale(1)}}
+  #cdInfo{position:absolute;left:0;right:0;bottom:16%;z-index:9;display:none;text-align:center;pointer-events:none}
+  #countdown[data-visible="true"] ~ #cdInfo{display:block}
+  #cdInfo .cap{font-family:var(--font-mono);font-size:12px;letter-spacing:2px;color:#fff;text-shadow:0 0 8px rgba(0,0,0,.8)}
+  #cdInfo .prog{font-family:var(--font-mono);font-size:10px;letter-spacing:1px;color:var(--acid);margin-top:6px;text-shadow:0 0 8px rgba(0,0,0,.8)}
+  #interCut{position:absolute;left:11px;right:11px;bottom:11px;z-index:12;display:flex;gap:8px}
+  #interCut[hidden]{display:none}
+  .icbtn{flex:1;border:2px solid var(--ink);background:#fff;font-family:var(--font-cjk);font-weight:700;font-size:13px;padding:12px 4px;cursor:pointer;min-height:46px}
+  .icbtn.primary{background:var(--acid)}
+  .icbtn.primary:hover{background:var(--acid-deep)}
+  .flash{position:absolute;inset:0;z-index:35;background:#fff;opacity:0;pointer-events:none}
+  .flash.go{animation:flash .5s ease}
+  @keyframes flash{0%{opacity:0}12%{opacity:1}100%{opacity:0}}
+
+  .controls{flex:none;display:flex;flex-direction:column;gap:10px}
+  .row{display:flex;align-items:center;gap:10px}
+  .rlabel{font-family:var(--font-mono);font-size:10px;letter-spacing:1.5px;min-width:40px;text-transform:uppercase}
+  .slider-wrap{flex:1;display:flex;align-items:center;height:22px}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:4px;background-color:var(--paper-3);cursor:pointer}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;background:var(--acid);border:2px solid var(--ink);cursor:pointer;border-radius:0;transform:rotate(45deg)}
+  input[type=range]::-moz-range-thumb{width:18px;height:18px;background:var(--acid);border:2px solid var(--ink);cursor:pointer;border-radius:0}
+  .pct{font-family:var(--font-mono);font-weight:700;font-size:12px;min-width:40px;text-align:right}
+  .fstrip{flex:1;display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;-webkit-overflow-scrolling:touch}
+  .fstrip::-webkit-scrollbar{height:0}
+  .filt{flex:0 0 auto;cursor:pointer;text-align:center;border:1.5px solid transparent;padding:3px}
+  .filt.on{border-color:var(--blue)}
+  .filt.on .sw{outline:2px solid var(--acid);outline-offset:-2px}
+  .filt .sw{width:44px;height:44px;border:1px solid var(--ink)}
+  .filt .fn{font-family:var(--font-mono);font-size:9px;margin-top:4px;white-space:nowrap}
+  .dock{flex:none;display:flex;align-items:center;justify-content:center;gap:26px;padding-top:2px}
+  #shoot{width:66px;height:66px;border-radius:50%;background:var(--acid);border:3px solid var(--ink);cursor:pointer;box-shadow:0 0 0 4px #fff,0 0 0 6px var(--ink);font-family:var(--font-cjk);font-weight:900;font-size:13px;color:var(--ink)}
+  #shoot:active{background:var(--acid-deep)}
+  #shoot:disabled{opacity:.45;cursor:default}
+  .ico{width:44px;height:44px;border:1.5px solid var(--ink);background:#fff;cursor:pointer;font-family:var(--font-mono);font-size:10px;color:var(--ink)}
+  #timerChoice{width:88px;height:44px;border:1.5px solid var(--ink);border-radius:0;background:#fff;color:var(--ink);font-family:var(--font-mono);font-size:10px;text-align:center;cursor:pointer;-webkit-appearance:none;appearance:none}
+  #status{font-family:var(--font-mono);font-size:10px;line-height:1.5;color:var(--muted);flex:none;min-height:15px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+
+  /* 引擎的單張結果畫面:流程層即刻隱藏,由拍貼條畫面取代 */
+  #result{display:none !important}
+
+  /* ⑤ 拍貼條結果 */
+  #screenStrip{overflow-x:hidden;overflow-y:auto;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch}
+  .res-title{display:flex;align-items:flex-end;justify-content:space-between;border-bottom:2px solid var(--ink);padding-bottom:10px;flex:none}
+  .res-title .t{font-family:var(--font-cjk);font-weight:900;font-size:24px;line-height:1}
+  .res-title .t b{color:var(--blue)}
+  .res-title .cnt{font-family:var(--font-mono);font-size:10px;color:var(--muted);letter-spacing:1px}
+  .frame-picker-head{display:flex;align-items:center;justify-content:space-between;margin:10px 0 6px;flex:none}
+  .frame-picker-head b{font-family:var(--font-cjk);font-size:12px}
+  .frame-picker-head span{font-family:var(--font-mono);font-size:8.5px;color:var(--muted);letter-spacing:.5px}
+  #framePicker{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;flex:none}
+  .frame-choice{min-width:0;min-height:58px;border:1.5px solid var(--ink);background:#fff;color:var(--ink);padding:4px;display:flex;align-items:center;justify-content:center;gap:5px;cursor:pointer}
+  .frame-choice[aria-pressed="true"]{border:2px solid var(--blue);background:var(--acid);box-shadow:3px 3px 0 var(--blue)}
+  .frame-choice img{width:28px;height:44px;object-fit:contain;background:transparent;border:1px solid rgba(0,0,0,.15)}
+  .frame-choice span{min-width:0;font-family:var(--font-cjk);font-weight:700;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #stripWrap{flex:none;overflow:visible;display:flex;justify-content:center;padding:14px 0}
+  #stripImg{display:block;flex:0 0 auto;align-self:flex-start;width:auto;max-width:82%;height:auto;object-fit:contain;box-shadow:10px 12px 0 rgba(21,0,255,.12),0 18px 44px rgba(0,0,0,.25)}
+  .scroll-hint{font-family:var(--font-mono);font-size:9.5px;letter-spacing:1px;color:var(--muted);text-align:center;margin-bottom:8px;flex:none}
+  .res-actions{flex:none;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .btn{border:2px solid var(--ink);background:#fff;color:var(--ink);font-family:var(--font-cjk);font-weight:700;font-size:14px;padding:13px 0;cursor:pointer;min-height:46px}
+  .btn.primary{background:var(--acid)}
+  .btn.primary:hover{background:var(--acid-deep)}
+  .btn[data-done="true"]{background:var(--blue);color:#fff}
+  .btn:disabled{opacity:.45;cursor:wait}
+  #stripHint{grid-column:1/-1;background:var(--acid);border:2px solid var(--ink);font-size:12px;line-height:1.5;padding:9px 11px}
+  #stripHint[hidden]{display:none}
+  .download-menu{grid-column:1/-1;border:1.5px solid var(--ink);background:var(--paper-2);padding:10px;display:flex;flex-direction:column;gap:8px}
+  .download-menu[hidden]{display:none}
+  .download-menu-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .download-menu-head b{font-family:var(--font-cjk);font-size:13px}
+  .download-menu-head button{border:0;background:transparent;color:var(--muted);font-family:var(--font-mono);font-size:10px;cursor:pointer;padding:4px}
+  #downloadOptions{display:grid;gap:7px}
+  .download-option{width:100%;min-height:58px;border:1.5px solid var(--ink);background:#fff;color:var(--ink);padding:6px;display:grid;grid-template-columns:44px minmax(0,1fr) auto;align-items:center;gap:9px;text-align:left;cursor:pointer}
+  .download-option:hover{background:var(--acid)}
+  .download-option:disabled{cursor:wait;opacity:.68}
+  .download-option:disabled:hover{background:#fff}
+  .download-option img{display:block;width:44px;height:44px;object-fit:cover;border:1px solid var(--ink)}
+  .download-option.contain-preview img{object-fit:contain;background:#fff}
+  .download-option .download-copy{min-width:0;display:flex;flex-direction:column;gap:2px}
+  .download-option strong{font-family:var(--font-cjk);font-size:12px}
+  .download-option small,.download-option .download-icon{font-family:var(--font-mono);font-size:8.5px;color:var(--muted)}
+  .download-option[data-done="true"]{background:var(--acid)}
+  #cloudBackup{grid-column:1/-1;background:var(--blue);color:#fff}
+  #cloudBackup:hover{background:#0f00c9}
+  .backup-panel{grid-column:1/-1;border:2px solid var(--blue);background:#fff;padding:12px;display:grid;grid-template-columns:112px minmax(0,1fr);gap:12px;align-items:start}
+  .backup-panel[hidden]{display:none}
+  #backupQr{width:112px;height:112px;border:1px solid var(--ink);background:#fff;padding:4px}
+  #backupQr svg{display:block;width:100%;height:100%}
+  .backup-info{min-width:0;display:flex;flex-direction:column;gap:7px}
+  .backup-info b{font-family:var(--font-cjk);font-size:13px}
+  #backupStatus{font-family:var(--font-mono);font-size:9px;line-height:1.5;color:var(--muted)}
+  #backupLink{font-family:var(--font-mono);font-size:9px;color:var(--blue);word-break:break-all}
+  .backup-link-actions{display:flex;gap:6px}
+  .backup-link-actions button,.backup-link-actions a{flex:1;border:1px solid var(--ink);background:var(--paper-2);color:var(--ink);font-family:var(--font-cjk);font-weight:700;font-size:10px;padding:7px;text-align:center;text-decoration:none;cursor:pointer}
+  .backup-warning{grid-column:1/-1;font-size:10px;line-height:1.5;color:#555;border-top:1px solid var(--paper-3);padding-top:8px}
+  @media (max-width:390px){.backup-panel{grid-template-columns:88px minmax(0,1fr)}#backupQr{width:88px;height:88px}}
+
+  /* 開場 */
+  #gate{align-items:center;justify-content:center;gap:18px;text-align:center;z-index:70;background:#faf9f1}
+  #gate .logo{position:relative;flex:none;width:min(88vw,440px);aspect-ratio:249/100;overflow:hidden}
+  #gate .logo img{position:absolute;display:block;width:180.321%;max-width:none;height:auto;left:-3.213%;top:-9%}
+  #gate .kicker{font-family:var(--font-mono);font-size:11px;letter-spacing:3px;text-transform:uppercase;color:var(--muted)}
+  #gate p{font-size:13px;color:#555;line-height:1.7;max-width:20em}
+  #start{background:var(--acid);border:2px solid var(--ink);color:var(--ink);font-family:var(--font-cjk);font-weight:900;font-size:16px;padding:15px 34px;cursor:pointer;min-height:52px}
+  #start:hover{background:var(--acid-deep)}
+
+  .fs.z1{z-index:61}.fs.z2{z-index:62}.fs.z3{z-index:63}
+  @media (prefers-reduced-motion:reduce){.rec .dot,#countdown span,.gen-progress i{animation:none}}
+</style>
+</head>
+<body data-log-key="cuts_log" data-camera-facing="user" data-cuts="2" data-live-photo="true">
+
+<!-- ③ 拍攝畫面(底層,常駐掛載,引擎綁在這裡) -->
+<div class="app">
+  <div class="fs-top" style="margin-bottom:0">
+    <div class="app-logo"><img src="/aidentity-logo-dark.png" alt="(AI)dentity" width="372" height="98"></div>
+    <div class="rec"><span class="dot"></span>LIVE</div>
+  </div>
+  <div id="cutBar">
+    <div class="l">格式：<b id="fmtName">兩格</b> · <span id="fmtRatio">比例 4:3 橫式</span></div>
+    <div id="chips"></div>
+    <div class="re" id="reFmt">⟲ 重選格式</div>
+  </div>
+  <div id="stageSlot" class="capture-slot">
+    <div id="stage" data-capture-aspect="4:3">
+      <video id="cam" autoplay playsinline muted></video>
+      <div id="cameraEffect" data-effect="none" aria-hidden="true"></div>
+      <img id="ghost" alt="">
+      <canvas id="ghostSkeleton" aria-hidden="true"></canvas>
+      <img id="shotPreview" alt="剛拍下的照片" hidden>
+      <div class="gen-overlay" aria-hidden="true"><div class="go-bar"><i></i></div><div class="go-text">✦ 正在生成你的 AI 幽靈…</div></div>
+      <div id="shotCompare" hidden>
+        <div class="sc-pane"><img id="scGhost" alt="AI 提案"><span>AI 提案</span></div>
+        <div class="sc-pane"><img id="scShot" alt="你拍的"><span>你拍的</span></div>
+      </div>
+      <div class="hud">◉ AUTO · f2.8</div>
+      <div class="hud r" id="hudR" style="left:auto;right:11px;color:#fff">4:3 · 45%</div>
+      <div class="camera-switch" role="group" aria-label="選擇鏡頭">
+        <button type="button" data-camera-facing="user" aria-pressed="true">前</button>
+        <button type="button" data-camera-facing="environment" aria-pressed="false">後</button>
+      </div>
+      <div id="spin">✦ AI 產生姿勢提案中…(約 5–15 秒)</div>
+      <button type="button" class="ico" id="effectCycle" title="特效">特效</button>
+      <div class="brk tl"><i class="h"></i><i class="v"></i><i class="px"></i></div>
+      <div class="brk tr"><i class="h"></i><i class="v"></i><i class="px"></i></div>
+      <div class="brk bl"><i class="h"></i><i class="v"></i><i class="px"></i></div>
+      <div class="brk br"><i class="h"></i><i class="v"></i><i class="px"></i></div>
+      <div id="countdown" data-visible="false" role="status" aria-live="assertive"></div>
+      <div id="cdInfo" aria-hidden="true"><div class="cap">保持微笑 · SMILE</div><div class="prog" id="cdProg">◤ 拍攝中 · 第 1 / 2 張</div></div>
+      <div class="flash" id="flash"></div>
+      <div id="interCut" hidden>
+        <button type="button" class="icbtn" id="retakeShot">↻ 重拍這張</button>
+        <button type="button" class="icbtn" id="regenShot">✦ 重新生成提案</button>
+        <button type="button" class="icbtn primary" id="nextShot">▶ 拍下一張</button>
+      </div>
+    </div>
+  </div>
+  <div id="reason" hidden role="note"></div>
+  <div class="controls">
+    <div class="row">
+      <span class="rlabel">透明度</span>
+      <div class="slider-wrap"><input type="range" id="op" min="0" max="90" value="45" aria-label="幽靈透明度"></div>
+      <span class="pct" id="opVal">45%</span>
+    </div>
+    <div class="row">
+      <span class="rlabel">濾鏡</span>
+      <div class="fstrip" id="filterStrip"></div>
+    </div>
+  </div>
+  <div class="dock">
+    <button type="button" class="ico" id="formCycle" title="幽靈形式">描邊</button>
+    <button type="button" id="shoot" aria-label="拍照"></button>
+    <select id="timerChoice" aria-label="快門倒數秒數">
+      <option value="0">⏱ 不倒數</option>
+      <option value="3">⏱ 3 秒</option>
+      <option value="5">⏱ 5 秒</option>
+      <option value="10">⏱ 10 秒</option>
+      <option value="15">⏱ 15 秒</option>
+    </select>
+  </div>
+  <div id="status">未啟動</div>
+</div>
+
+<!-- 引擎需要的單張結果元素(流程層以 CSS 永久隱藏,改用拍貼條畫面) -->
+<div id="result" data-mode="solo" aria-hidden="true">
+  <img id="resReal" alt=""><div id="ghostPane" hidden><img id="resGhost" alt=""></div>
+  <span id="saveHint" hidden></span>
+  <button type="button" id="download" hidden></button>
+  <button type="button" id="close" hidden></button>
+</div>
+
+<!-- ① 格式選擇 -->
+<section class="fs z1" id="screenLayout" hidden>
+  <div class="fs-top">
+    <div class="app-logo"><img src="/aidentity-logo-dark.png" alt="(AI)dentity" width="372" height="98"></div>
+    <div class="step">STEP <b>1</b>/5</div>
+  </div>
+  <div class="pick-head">
+    <div class="t">選擇<b>拍貼格式</b></div>
+    <div class="s">格式會決定拍攝的畫面比例，先選好再開始構圖。</div>
+  </div>
+  <div class="opts" id="layoutOpts">
+    <div class="opt" data-cuts="1">
+      <div class="mini"><img src="/cuts-one-example.png" alt="一格拍貼範例"></div>
+      <div class="txt"><div class="nm">一格</div><div class="rt">3:4 · 直式</div><div class="ds">單張直式照片，比例依一格範例。</div></div>
+      <span class="chk">✓ 已選</span>
+    </div>
+    <div class="opt on" data-cuts="2">
+      <div class="mini"><img src="/cuts-two-example.png" alt="兩格拍貼範例"></div>
+      <div class="txt"><div class="nm">兩格</div><div class="rt">4:3 × 2 · 橫式</div><div class="ds">兩張橫式照片，比例依兩格範例。每一張都可以重新生成提案。</div></div>
+      <span class="chk">✓ 已選</span>
+    </div>
+  </div>
+  <div class="pick-btn" id="layoutNext">下一步 · 生成幽靈 →</div>
+</section>
+
+<!-- ② 生成幽靈 -->
+<section class="fs z2" id="screenGen" hidden>
+  <div class="fs-top">
+    <div class="app-logo"><img src="/aidentity-logo-dark.png" alt="(AI)dentity" width="372" height="98"></div>
+    <div class="step">STEP <b>2</b>/5</div>
+  </div>
+  <div class="gen-title">
+    <div class="t">生成<b>幽靈</b></div>
+    <div class="s">輸入這張想要的感覺並生成 AI 幽靈，構圖時可半透明疊圖對齊姿勢。</div>
+  </div>
+  <label class="prompt" for="stylePrompt">
+    <span class="plabel">✦ PROMPT · 這張想要的感覺（只影響姿勢/表情/構圖，不動色調）</span>
+    <textarea id="stylePrompt" rows="2" maxlength="280" placeholder="例:chill、有自信、神秘、可愛"></textarea>
+    <button type="button" id="summon">✦ 生成幽靈</button>
+  </label>
+  <div id="genStatus"></div>
+  <div id="genModel" hidden></div>
+  <div id="genProgress" class="gen-progress" role="progressbar" aria-label="AI 幽靈生成進度" aria-valuetext="生成中" hidden><i></i></div>
+  <div class="capture-slot" id="genPreviewSlot">
+    <div class="gen-preview" id="genPreview" data-capture-aspect="4:3">
+      <div class="gen-overlay" aria-hidden="true"><div class="go-bar"><i></i></div><div class="go-text">✦ 正在生成你的 AI 幽靈…</div></div>
+      <span class="gtag" hidden id="genTag">✦ AI GHOST</span>
+      <span class="gcap" id="genCap">對準畫面後生成幽靈</span>
+    </div>
+  </div>
+  <div id="genReason" hidden></div>
+  <div class="gen-actions">
+    <button type="button" class="gbtn primary" id="startShoot" disabled>開始構圖 →</button>
+    <button type="button" class="gbtn" id="regenBtn">↻ 重新生成</button>
+  </div>
+  <div class="skip-row"><span class="skip" id="backLayout">⟲ 重選格式</span><span class="skip" id="skipGen">略過生成，直接拍攝 →</span></div>
+</section>
+
+<!-- ⑤ 拍貼條結果 -->
+<section class="fs z3" id="screenStrip" hidden>
+  <div class="fs-top">
+    <div class="app-logo"><img src="/aidentity-logo-dark.png" alt="(AI)dentity" width="372" height="98"></div>
+    <div class="rec" style="color:var(--muted)">已完成 ✓</div>
+  </div>
+  <div class="res-title">
+    <div class="t">你的<b>拍貼</b></div>
+    <div class="cnt" id="stripMeta">兩格 · 4:3 橫式</div>
+  </div>
+  <div class="frame-picker-head"><b>選擇拍貼框</b><span>預覽與下載會同步更新</span></div>
+  <div id="framePicker" role="group" aria-label="選擇拍貼框"></div>
+  <div id="stripWrap"><img id="stripImg" alt="合成拍貼條"></div>
+  <div class="scroll-hint">↕ 向下滑動查看完整拍貼與下載</div>
+  <div class="res-actions">
+    <span id="stripHint" hidden>這條還沒下載,重新拍攝後就找不回來了——要留的話先按「下載檔案」並選擇「完整拍貼」或「原況拍貼 GIF」,確定不留再按一次重新拍攝</span>
+    <button type="button" class="btn primary" id="stripDownload" aria-expanded="false" aria-controls="downloadMenu">↧ 下載檔案</button>
+    <button type="button" class="btn" id="stripRetake">↻ 重新拍攝</button>
+    <button type="button" class="btn" id="cloudBackup">☁ 雲端備份全部檔案</button>
+    <div class="backup-panel" id="backupPanel" hidden>
+      <div id="backupQr" aria-label="雲端備份 QR code"></div>
+      <div class="backup-info">
+        <b>完整備份已建立</b>
+        <div id="backupStatus" role="status" aria-live="polite"></div>
+        <a id="backupLink" href="" target="_blank" rel="noopener noreferrer"></a>
+        <div class="backup-link-actions">
+          <button type="button" id="backupCopy">複製連結</button>
+          <a id="backupOpen" href="" target="_blank" rel="noopener noreferrer">開啟備份</a>
+        </div>
+      </div>
+      <div class="backup-warning">連結包含照片、AI 提案、每張 prompt、提案文字、完整拍貼與原況 GIF。任何取得連結或 QR code 的人都能查看，請妥善保管。</div>
+    </div>
+    <div class="download-menu" id="downloadMenu" role="region" aria-labelledby="downloadMenuTitle" hidden>
+      <div class="download-menu-head"><b id="downloadMenuTitle">選擇下載檔案</b><button type="button" id="downloadClose">收起 ×</button></div>
+      <div id="downloadOptions"></div>
+    </div>
+  </div>
+</section>
+
+<!-- 開場 -->
+<section class="fs" id="gate">
+  <div class="kicker">(AI)DENTITY · PHOTO BOOTH</div>
+  <div class="logo"><img src="/soulsee-page8.png" alt="SoulSee" width="2245" height="3179"></div>
+  <button type="button" id="start">開啟相機</button>
+</section>
+
+<!-- 引擎需要的原生控制項:由視覺控制項驅動,功能與 /play 相同 -->
+<select id="filterSelect" hidden aria-hidden="true"></select>
+<select id="effectSelect" hidden aria-hidden="true"></select>
+<select id="timerSelect" hidden aria-hidden="true">
+  <option value="0">關</option>
+  <option value="3">3 秒</option>
+  <option value="5">5 秒</option>
+  <option value="10">10 秒</option>
+  <option value="15" selected>15 秒</option>
+</select>
+<select id="formSelect" hidden aria-hidden="true">
+  <option value="contour">描邊</option>
+  <option value="face-contour" data-cycle-label="表情描邊">只有表情描邊</option>
+  <option value="body-contour" data-cycle-label="肢體描邊">只有肢體輪廓沒有表情</option>
+  <option value="stick">火柴人</option>
+  <option value="hybrid">照片+骨架</option>
+  <option value="photo">照片</option>
+</select>
+
+<script type="module" src="/photobooth-engine.js"></script>
+<script type="module">
+/* 流程層:畫面依序切換 + 連拍收集 + 拍貼條合成。
+   不重新實作拍照/生成邏輯,不碰 prompt;只驅動引擎既有控制項、
+   並監聽引擎的 openhci:ghost / openhci:shot 事件。 */
+import { FILTER_PRESETS } from '/camera-effects.js';
+import { encodePhotoGif } from '/photo-gif.js';
+
+const $ = id => document.getElementById(id);
+const fire = el => el.dispatchEvent(new Event('change'));
+const screens = { layout: $('screenLayout'), gen: $('screenGen'), strip: $('screenStrip') };
+function showScreen(name) {
+  for (const [key, el] of Object.entries(screens)) el.hidden = key !== name;
+  if (!name) for (const el of Object.values(screens)) el.hidden = true;
+  if (name === 'strip') screens.strip.scrollTop = 0;
+}
+
+/* ---- 流程狀態 ---- */
+let cutsTotal = 2;
+let shots = [];
+let selectedFrameId = 'white';
+let stripRenderToken = 0;
+let shotsRevision = 0;
+let liveGifCacheKey = '';
+let liveGifPromise = null;
+let currentProposal = null;
+
+function markShotsChanged() {
+  shotsRevision += 1;
+  liveGifCacheKey = '';
+  liveGifPromise = null;
+}
+
+function stopLivePhotoCapture({ cancelActive = true } = {}) {
+  document.dispatchEvent(new CustomEvent('openhci:live-photo-stop', { detail: { cancelActive } }));
+}
+
+function startLivePhotoCapture() {
+  document.dispatchEvent(new Event('openhci:live-photo-start'));
+}
+
+function discardShot(shot) {
+  shot?.livePhoto?.cancel?.();
+}
+
+function resetShots() {
+  shots.forEach(discardShot);
+  shots = [];
+  markShotsChanged();
+  resetCloudBackup();
+}
+
+const FORMATS = {
+  1: { name: '一格', ratio: '3:4', label: '比例 3:4 直式', aspect: 3 / 4 },
+  2: { name: '兩格', ratio: '4:3', label: '比例 4:3 橫式', aspect: 4 / 3 },
+};
+
+const FRAME_ORDER = ['white', 'gray', 'black', 'openhci'];
+const FRAME_LABELS = { white: '白', gray: '灰', black: '黑', openhci: 'OpenHCI' };
+const SIMPLE_ONE_SLOT = [{ x: 24.4893, y: 36.7324, width: 524.9627, height: 699.9516 }];
+const SIMPLE_TWO_SLOTS = [
+  { x: 24.4893, y: 24.4883, width: 524.4527, height: 393.3397 },
+  { x: 24.4893, y: 428.542, width: 524.4527, height: 393.34 },
+];
+const FRAME_TEMPLATES = {
+  1: {
+    white: { src: '/cuts-frame-one-white.svg', figmaNode: '47:4', sourceWidth: 575.47, sourceHeight: 893.815, slots: SIMPLE_ONE_SLOT, textColor: '#0a0a0a' },
+    gray: { src: '/cuts-frame-one-gray.svg', figmaNode: '47:16', sourceWidth: 575.47, sourceHeight: 893.815, slots: SIMPLE_ONE_SLOT, textColor: '#ffffff' },
+    black: { src: '/cuts-frame-one-black.svg', figmaNode: '47:10', sourceWidth: 575.47, sourceHeight: 893.815, slots: SIMPLE_ONE_SLOT, textColor: '#ffffff' },
+    openhci: { src: '/cuts-frame-one-openhci.png', figmaNode: '47:66', sourceWidth: 1151, sourceHeight: 1788, slots: [{ x: 49, y: 98, width: 1052, height: 1395 }], branded: true },
+  },
+  2: {
+    white: { src: '/cuts-frame-two-white.svg', figmaNode: '47:22', sourceWidth: 575.47, sourceHeight: 893.815, slots: SIMPLE_TWO_SLOTS, textColor: '#0a0a0a' },
+    gray: { src: '/cuts-frame-two-gray.svg', figmaNode: '47:40', sourceWidth: 575.47, sourceHeight: 893.815, slots: SIMPLE_TWO_SLOTS, textColor: '#ffffff' },
+    black: { src: '/cuts-frame-two-black.svg', figmaNode: '47:31', sourceWidth: 575.47, sourceHeight: 893.815, slots: SIMPLE_TWO_SLOTS, textColor: '#ffffff' },
+    openhci: { src: '/cuts-frame-two-openhci.png', figmaNode: '47:49', sourceWidth: 1151, sourceHeight: 1788, slots: [{ x: 49, y: 74, width: 1053, height: 783 }, { x: 49, y: 882, width: 1036, height: 777 }], branded: true },
+  },
+};
+
+function fitCaptureFrame(frame) {
+  const slot = frame.parentElement;
+  const maxWidth = slot.clientWidth;
+  const maxHeight = slot.clientHeight;
+  if (!maxWidth || !maxHeight) return;
+  const aspect = FORMATS[cutsTotal].aspect;
+  let width = maxWidth;
+  let height = width / aspect;
+  if (height > maxHeight) {
+    height = maxHeight;
+    width = height * aspect;
+  }
+  frame.style.width = `${Math.floor(width)}px`;
+  frame.style.height = `${Math.floor(height)}px`;
+}
+
+function fitCaptureFrames() {
+  fitCaptureFrame($('stage'));
+  fitCaptureFrame($('genPreview'));
+}
+
+function applyCaptureFormat() {
+  const format = FORMATS[cutsTotal];
+  document.body.dataset.cuts = String(cutsTotal);
+  $('stage').dataset.captureAspect = format.ratio;
+  $('genPreview').dataset.captureAspect = format.ratio;
+  $('fmtName').textContent = format.name;
+  $('fmtRatio').textContent = format.label;
+  $('hudR').textContent = `${format.ratio} · ${$('op').value}%`;
+  requestAnimationFrame(fitCaptureFrames);
+}
+
+window.addEventListener('resize', fitCaptureFrames);
+if ('ResizeObserver' in window) {
+  const captureSlotObserver = new ResizeObserver(fitCaptureFrames);
+  captureSlotObserver.observe($('stageSlot'));
+  captureSlotObserver.observe($('genPreviewSlot'));
+}
+applyCaptureFormat();
+
+/* ---- 開場 → ① ---- */
+$('start').addEventListener('click', () => {
+  $('gate').hidden = true;
+  showScreen('layout');
+}, { once: true });
+
+/* ---- ① 格式選擇 ---- */
+$('layoutOpts').addEventListener('click', event => {
+  const opt = event.target.closest('.opt');
+  if (!opt) return;
+  for (const o of $('layoutOpts').children) o.classList.toggle('on', o === opt);
+  cutsTotal = Number(opt.dataset.cuts);
+  applyCaptureFormat();
+});
+function mountCameraInGenPreview() {
+  const cam = $('cam');
+  const preview = $('genPreview');
+  if (cam.parentElement !== preview) preview.prepend(cam);
+  const previous = preview.querySelector('img');
+  if (previous) previous.hidden = true;
+  $('genTag').hidden = true;
+  $('genCap').textContent = '對準畫面後生成幽靈';
+}
+
+function mountCameraInStage() {
+  const cam = $('cam');
+  const stage = $('stage');
+  if (cam.parentElement !== stage) stage.prepend(cam);
+}
+
+function clearShotPreview() {
+  const preview = $('shotPreview');
+  preview.hidden = true;
+  preview.removeAttribute('src');
+  $('shotCompare').hidden = true;
+}
+
+function resumeLivePreview() {
+  clearShotPreview();
+  mountCameraInStage();
+  fitCaptureFrames();
+  $('shoot').disabled = false;
+}
+
+$('layoutNext').addEventListener('click', () => {
+  resetShots();
+  selectedFrameId = 'white';
+  stripRenderToken += 1;
+  applyCaptureFormat();
+  renderChips();
+  enterGenerationStep({ clearPrompt: false });
+});
+
+/* ---- ② 生成幽靈 ---- */
+const genStatus = $('genStatus');
+const genModel = $('genModel');
+const genProgress = $('genProgress');
+let generationInFlight = false;
+const MODEL_DISPLAY = {
+  'gemini-3.1-flash-image': 'Gemini 3.1 Flash Image',
+  'gemini-3.1-flash-lite-image': 'Gemini 3.1 Flash Lite Image',
+  'gemini-2.5-flash-image': 'Gemini 2.5 Flash Image',
+  'gpt-image-1.5': 'GPT Image 1.5',
+};
+
+function showGenerationModel({ model, modelLabel } = {}) {
+  const label = MODEL_DISPLAY[model] || modelLabel || model;
+  genModel.textContent = label ? `model · ${label}` : '';
+  genModel.hidden = !label;
+}
+
+function setGenerationProgress(state) {
+  genProgress.hidden = state === 'idle' || state === 'active';
+  genProgress.classList.toggle('done', state === 'done');
+  genProgress.classList.toggle('failed', state === 'failed');
+  if (state === 'done') {
+    genProgress.setAttribute('aria-valuenow', '100');
+    genProgress.setAttribute('aria-valuetext', '生成完成');
+  } else {
+    genProgress.removeAttribute('aria-valuenow');
+    genProgress.setAttribute('aria-valuetext', state === 'failed' ? '生成失敗' : '生成中');
+  }
+}
+
+function clearCurrentGhost() {
+  generationInFlight = false;
+  currentProposal = null;
+  document.body.classList.remove('generating');
+  document.dispatchEvent(new Event('openhci:clear-ghost'));
+}
+
+function enterGenerationStep({ clearPrompt = true } = {}) {
+  stopLivePhotoCapture({ cancelActive: false });
+  clearShotPreview();
+  clearCurrentGhost();
+  setGenerationProgress('idle');
+  genStatus.classList.remove('done');
+  genStatus.textContent = '';
+  showGenerationModel();
+  const reason = $('genReason');
+  reason.textContent = '';
+  reason.hidden = true;
+  $('startShoot').disabled = true;
+  $('shoot').disabled = true;
+  if (clearPrompt) $('stylePrompt').value = '';
+  showScreen('gen');
+  mountCameraInGenPreview();
+  requestAnimationFrame(fitCaptureFrames);
+}
+
+$('summon').addEventListener('click', () => {
+  generationInFlight = true;
+  document.body.classList.add('generating');
+  setGenerationProgress('active');
+  genStatus.classList.remove('done');
+  genStatus.textContent = '正在生成你的 AI 幽靈…';
+  $('startShoot').disabled = true;
+  mountCameraInGenPreview();
+  queueMicrotask(() => {
+    if (generationInFlight && !$('summon').disabled) {
+      generationInFlight = false;
+      document.body.classList.remove('generating');
+      setGenerationProgress('failed');
+      genStatus.textContent = '生成失敗，請再試一次';
+    }
+  });
+});
+
+document.addEventListener('openhci:ghost-start', event => {
+  currentProposal = null;
+  showGenerationModel(event.detail);
+});
+
+new MutationObserver(() => {
+  if (generationInFlight && !$('summon').disabled) {
+    generationInFlight = false;
+    document.body.classList.remove('generating');
+    setGenerationProgress('failed');
+    genStatus.textContent = '生成失敗，請再試一次';
+  }
+}).observe($('summon'), { attributes: true, attributeFilter: ['disabled'] });
+
+document.addEventListener('openhci:ghost', event => {
+  generationInFlight = false;
+  document.body.classList.remove('generating');
+  setGenerationProgress('done');
+  const preview = $('genPreview');
+  let img = preview.querySelector('img');
+  if (!img) {
+    img = document.createElement('img');
+    img.alt = 'AI 幽靈預覽';
+    preview.append(img);
+  }
+  img.hidden = false;
+  img.src = event.detail.src;
+  img.classList.toggle('is-front-camera', $('cam').classList.contains('is-front-camera'));
+  $('genCap').textContent = '幽靈預覽 · 構圖時可調透明度對齊';
+  $('genTag').hidden = false;
+  genStatus.classList.add('done');
+  genStatus.textContent = '✓ 幽靈生成完成';
+  currentProposal = {
+    promptInputRaw: event.detail.promptInputRaw || '',
+    stylePreference: event.detail.stylePreference || '',
+    imagePrompt: event.detail.imagePrompt || '',
+    reason: event.detail.reason || '',
+    strategy: event.detail.strategy || '',
+    model: event.detail.model || '',
+    modelLabel: event.detail.modelLabel || '',
+    requestedModel: event.detail.requestedModel || '',
+    upstream: event.detail.upstream || '',
+  };
+  showGenerationModel(event.detail);
+  const reason = $('genReason');
+  reason.textContent = event.detail.reason || '';
+  reason.hidden = !event.detail.reason;
+  $('startShoot').disabled = false;
+});
+$('startShoot').addEventListener('click', () => beginShooting());
+$('regenBtn').addEventListener('click', () => $('summon').click());
+$('skipGen').addEventListener('click', () => {
+  clearCurrentGhost();
+  beginShooting();
+});
+$('backLayout').addEventListener('click', () => {
+  resetShots();
+  stopLivePhotoCapture();
+  renderChips();
+  clearCurrentGhost();
+  mountCameraInStage();
+  showScreen('layout');
+});
+
+function beginShooting() {
+  resumeLivePreview();
+  renderChips();
+  updateCdProg();
+  $('interCut').hidden = true;
+  showScreen(null);
+  startLivePhotoCapture();
+}
+
+function updateCdProg() {
+  $('cdProg').textContent = `◤ 拍攝中 · 第 ${Math.min(shots.length + 1, cutsTotal)} / ${cutsTotal} 張`;
+}
+
+/* ---- ③ 連拍:每張走引擎的倒數+拍照,事件收集 ---- */
+function renderChips() {
+  $('chips').replaceChildren(...Array.from({ length: cutsTotal }, (_, index) => {
+    const chip = document.createElement('i');
+    if (index < shots.length) chip.classList.add('done');
+    return chip;
+  }));
+}
+
+// 每張拍完顯示實際存下的照片並定格:可重拍這張;未拍完可重新生成提案再拍下一張
+document.addEventListener('openhci:shot', event => {
+  const ghostSrc = $('ghost').getAttribute('src') || null;
+  const livePhoto = event.detail.livePhoto
+    ? { ...event.detail.livePhoto, ready: event.detail.livePhoto.ready.catch(() => null) }
+    : null;
+  const cameraFacing = event.detail.cameraFacing || ($('cam').classList.contains('is-front-camera') ? 'user' : 'environment');
+  const shot = {
+    photo: event.detail.dataUrl,
+    ghost: ghostSrc,
+    livePhoto,
+    promptInputRaw: currentProposal?.promptInputRaw ?? $('stylePrompt').value.slice(0, 280),
+    proposal: ghostSrc && currentProposal ? { ...currentProposal } : null,
+    cameraFacing,
+    capturedMirrored: event.detail.capturedMirrored ?? cameraFacing === 'user',
+    ghostMirrored: Boolean(ghostSrc) && cameraFacing === 'user',
+  };
+  shots.push(shot);
+  markShotsChanged();
+  livePhoto?.ready.then(clip => {
+    if (!shots.includes(shot)) return;
+    $('status').textContent = clip ? '✓ 原況短片已保存' : '原況短片未完成，GIF 將使用定格照片';
+  });
+  // 有 AI 提案就左右對比;沒有(略過生成)退回單張定格
+  if (ghostSrc) {
+    $('scGhost').src = ghostSrc;
+    $('scGhost').classList.toggle('is-front-camera', $('cam').classList.contains('is-front-camera'));
+    $('scShot').src = event.detail.dataUrl;
+    $('shotCompare').hidden = false;
+  } else {
+    const shotPreview = $('shotPreview');
+    shotPreview.src = event.detail.dataUrl;
+    shotPreview.hidden = false;
+  }
+  $('shoot').disabled = true;
+  renderChips();
+  updateCdProg();
+  const flash = $('flash');
+  flash.classList.remove('go');
+  void flash.offsetWidth;
+  flash.classList.add('go');
+  const isLast = shots.length >= cutsTotal;
+  $('regenShot').hidden = isLast;
+  $('nextShot').textContent = isLast ? '✓ 完成拍貼' : '▶ 拍下一張';
+  $('interCut').hidden = false;
+});
+
+$('retakeShot').addEventListener('click', () => {
+  discardShot(shots.pop());
+  markShotsChanged();
+  renderChips();
+  updateCdProg();
+  $('interCut').hidden = true;
+  resumeLivePreview();
+  startLivePhotoCapture();
+});
+$('regenShot').addEventListener('click', () => {
+  $('interCut').hidden = true;
+  enterGenerationStep({ clearPrompt: false });
+});
+$('nextShot').addEventListener('click', () => {
+  $('interCut').hidden = true;
+  if (shots.length >= cutsTotal) {
+    composeStrip().then(composed => {
+      if (!composed) return;
+      showScreen('strip');
+      clearShotPreview();
+    }).catch(() => {
+      $('interCut').hidden = false;
+    });
+    return;
+  }
+  enterGenerationStep({ clearPrompt: true });
+});
+
+$('reFmt').addEventListener('click', () => {
+  resetShots();
+  stopLivePhotoCapture();
+  clearCurrentGhost();
+  resumeLivePreview();
+  $('interCut').hidden = true;
+  showScreen('layout');
+});
+
+/* ---- ⑤ 拍貼條合成 ---- */
+const loadImage = src => new Promise((resolve, reject) => {
+  const img = new Image();
+  img.onload = () => resolve(img);
+  img.onerror = () => reject(new Error(`無法載入素材:${src}`));
+  img.src = src;
+});
+
+function drawImageCover(ctx, img, slot, bleed = 2) {
+  const sourceAspect = img.naturalWidth / img.naturalHeight;
+  const targetAspect = slot.width / slot.height;
+  let sx = 0, sy = 0, sw = img.naturalWidth, sh = img.naturalHeight;
+  if (sourceAspect > targetAspect) {
+    sw = img.naturalHeight * targetAspect;
+    sx = (img.naturalWidth - sw) / 2;
+  } else if (sourceAspect < targetAspect) {
+    sh = img.naturalWidth / targetAspect;
+    sy = (img.naturalHeight - sh) / 2;
+  }
+  ctx.drawImage(img, sx, sy, sw, sh, slot.x - bleed, slot.y - bleed, slot.width + bleed * 2, slot.height + bleed * 2);
+}
+
+function scaledFrameSlots(template, width, height) {
+  const scaleX = width / template.sourceWidth;
+  const scaleY = height / template.sourceHeight;
+  return template.slots.map(slot => ({
+    x: slot.x * scaleX,
+    y: slot.y * scaleY,
+    width: slot.width * scaleX,
+    height: slot.height * scaleY,
+  }));
+}
+
+function liveFrameSource(clip, frameIndex, shutterIndex) {
+  if (!clip?.frames?.length) return null;
+  const sourceShutter = Number.isInteger(clip.shutterIndex) ? clip.shutterIndex : 0;
+  const sourceIndex = Math.max(0, Math.min(clip.frames.length - 1, sourceShutter + frameIndex - shutterIndex));
+  return clip.frames[sourceIndex];
+}
+
+async function createFramedLiveGif(shotList, format, frameId, feeling) {
+  const width = 360, height = 559;
+  const frameCount = 9;
+  const shutterIndex = 4;
+  const template = FRAME_TEMPLATES[format][frameId];
+  const clips = await Promise.all(shotList.map(async shot => {
+    const livePhoto = await shot.livePhoto?.ready;
+    return livePhoto?.frames?.length
+      ? livePhoto
+      : { frames: [shot.photo], shutterIndex: 0, delayMs: 167 };
+  }));
+  const sources = new Set();
+  for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
+    clips.forEach(clip => sources.add(liveFrameSource(clip, frameIndex, shutterIndex)));
+  }
+  sources.delete(null);
+  sources.delete(undefined);
+  const [frameImage, loadedSources] = await Promise.all([
+    loadImage(template.src),
+    Promise.all(Array.from(sources, async src => [src, await loadImage(src)])),
+    Promise.all([
+      document.fonts.load('400 58px "Instrument Serif"'),
+      document.fonts.load('400 26px "Space Mono"'),
+    ]).catch(() => []),
+  ]);
+  const imageBySource = new Map(loadedSources);
+  const slots = scaledFrameSlots(template, width, height);
+
+  const overlay = Object.assign(document.createElement('canvas'), { width, height });
+  const overlayCtx = overlay.getContext('2d');
+  if (!overlayCtx) throw new Error('瀏覽器無法建立 GIF 框線畫布');
+  overlayCtx.drawImage(frameImage, 0, 0, width, height);
+  drawStripFooter(overlayCtx, template, slots, width, format, feeling);
+
+  const canvas = Object.assign(document.createElement('canvas'), { width, height });
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) throw new Error('瀏覽器無法建立 GIF 畫布');
+  const frames = [];
+  for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, width, height);
+    clips.forEach((clip, index) => {
+      const source = liveFrameSource(clip, frameIndex, shutterIndex);
+      const image = imageBySource.get(source);
+      if (image) drawImageCover(ctx, image, slots[index], 1);
+    });
+    ctx.drawImage(overlay, 0, 0);
+    frames.push(ctx.getImageData(0, 0, width, height).data);
+  }
+  return encodePhotoGif(frames, { width, height, delayMs: 167, loop: 0 });
+}
+
+function getFramedLiveGif(cacheKey, shotList, format, frameId, feeling) {
+  if (liveGifCacheKey !== cacheKey || !liveGifPromise) {
+    liveGifCacheKey = cacheKey;
+    liveGifPromise = createFramedLiveGif(shotList, format, frameId, feeling).catch(error => {
+      if (liveGifCacheKey === cacheKey) {
+        liveGifCacheKey = '';
+        liveGifPromise = null;
+      }
+      throw error;
+    });
+  }
+  return liveGifPromise;
+}
+
+function renderFramePicker() {
+  const templates = FRAME_TEMPLATES[cutsTotal];
+  $('framePicker').replaceChildren(...FRAME_ORDER.map(frameId => {
+    const template = templates[frameId];
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'frame-choice';
+    button.dataset.frameId = frameId;
+    button.dataset.figmaNodeId = template.figmaNode;
+    button.setAttribute('aria-pressed', String(frameId === selectedFrameId));
+    button.setAttribute('aria-label', `${FRAME_LABELS[frameId]}拍貼框`);
+    const image = document.createElement('img');
+    image.src = template.src;
+    image.alt = '';
+    const label = document.createElement('span');
+    label.textContent = FRAME_LABELS[frameId];
+    button.append(image, label);
+    button.addEventListener('click', () => {
+      if (frameId === selectedFrameId) return;
+      selectedFrameId = frameId;
+      renderFramePicker();
+      void composeStrip().catch(() => {});
+    });
+    return button;
+  }));
+}
+
+function drawStripFooter(ctx, template, slots, width, format = cutsTotal, feeling = null) {
+  if (template.branded) return;
+  const oneCut = format === 1;
+  const scale = width / 1152;
+  const x = 50 * scale;
+  const photoBottom = Math.max(...slots.map(slot => slot.y + slot.height));
+  const brandY = photoBottom + (oneCut ? 105 : 49) * scale;
+  const dateY = brandY + (oneCut ? 54 : 33) * scale;
+  const footerFeeling = feeling ?? $('stylePrompt').value.trim().replace(/\s+/g, ' ').slice(0, 20);
+  ctx.fillStyle = template.textColor;
+  ctx.font = `400 ${(oneCut ? 58 : 34) * scale}px "Instrument Serif","Noto Serif TC",serif`;
+  ctx.fillText(`(AI)dentity${footerFeeling ? ' · ' + footerFeeling : ''}`, x, brandY, width - x * 2);
+  ctx.globalAlpha = 0.72;
+  ctx.font = `400 ${(oneCut ? 26 : 18) * scale}px "Space Mono",monospace`;
+  const now = new Date();
+  const pad = value => String(value).padStart(2, '0');
+  ctx.fillText(`${now.getFullYear()}.${pad(now.getMonth() + 1)}.${pad(now.getDate())}　NO.${pad(now.getMonth() + 1)}${pad(now.getDate())}`, x, dateY, width - x * 2);
+  ctx.globalAlpha = 1;
+}
+
+async function composeStrip() {
+  stopLivePhotoCapture({ cancelActive: false });
+  invalidateCloudBackupForComposition();
+  const token = ++stripRenderToken;
+  const template = FRAME_TEMPLATES[cutsTotal][selectedFrameId];
+  const download = $('stripDownload');
+  closeDownloadMenu();
+  renderFramePicker();
+  $('framePicker').setAttribute('aria-busy', 'true');
+  download.disabled = true;
+  download.dataset.done = 'false';
+  download.textContent = '合成中…';
+  stripDataUrl = '';
+
+  try {
+    const [images, frameImage] = await Promise.all([
+      Promise.all(shots.map(item => loadImage(item.photo))),
+      loadImage(template.src),
+      Promise.all([
+        document.fonts.load('400 58px "Instrument Serif"'),
+        document.fonts.load('400 26px "Space Mono"'),
+      ]).catch(() => []),
+    ]);
+    if (token !== stripRenderToken) return false;
+
+    const width = 1152, height = 1788;
+    const slots = scaledFrameSlots(template, width, height);
+    const canvas = Object.assign(document.createElement('canvas'), { width, height });
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, width, height);
+    images.forEach((image, index) => drawImageCover(ctx, image, slots[index]));
+    ctx.drawImage(frameImage, 0, 0, width, height);
+    drawStripFooter(ctx, template, slots, width, cutsTotal);
+
+    const nextDataUrl = canvas.toDataURL('image/png');
+    if (token !== stripRenderToken) return false;
+    stripDataUrl = nextDataUrl;
+    $('stripImg').src = stripDataUrl;
+    $('stripMeta').textContent = `${FORMATS[cutsTotal].name} · ${FORMATS[cutsTotal].ratio} ${cutsTotal === 1 ? '直式' : '橫式'} · ${FRAME_LABELS[selectedFrameId]}框`;
+    stripDownloaded = false;
+    retakeArmed = false;
+    $('stripHint').hidden = true;
+    download.disabled = false;
+    download.dataset.done = 'false';
+    download.textContent = '↧ 下載檔案';
+    $('cloudBackup').disabled = true;
+    $('cloudBackup').dataset.done = 'false';
+    $('cloudBackup').dataset.retry = 'false';
+    $('cloudBackup').textContent = '☁ QR code 準備中…';
+    $('framePicker').setAttribute('aria-busy', 'false');
+    void startCloudBackup();
+    return true;
+  } catch (error) {
+    if (token === stripRenderToken) {
+      $('framePicker').setAttribute('aria-busy', 'false');
+      download.textContent = '合成失敗';
+      $('status').textContent = `拍貼合成失敗:${error.message}`;
+    }
+    throw error;
+  }
+}
+
+/* ---- ⑤ 下載選單與提醒(未下載完整拍貼先擋一次) ---- */
+let stripDataUrl = '';
+let stripDownloaded = false;
+let retakeArmed = false;
+let pendingBackupSecret = '';
+let pendingBackupRenderToken = -1;
+let backupAbortController = null;
+let completedBackupUrl = '';
+let completedBackupRenderToken = -1;
+
+function clearBackupPresentation() {
+  $('backupQr').replaceChildren();
+  $('backupLink').removeAttribute('href');
+  $('backupLink').textContent = '';
+  $('backupOpen').removeAttribute('href');
+}
+
+function resetCloudBackup() {
+  backupAbortController?.abort();
+  backupAbortController = null;
+  pendingBackupSecret = '';
+  pendingBackupRenderToken = -1;
+  completedBackupUrl = '';
+  completedBackupRenderToken = -1;
+  clearBackupPresentation();
+  const panel = $('backupPanel');
+  if (panel) panel.hidden = true;
+  const button = $('cloudBackup');
+  if (button) {
+    button.disabled = false;
+    button.dataset.done = 'false';
+    button.dataset.retry = 'false';
+    button.textContent = '☁ 雲端備份全部檔案';
+  }
+}
+
+function invalidateCloudBackupForComposition() {
+  backupAbortController?.abort();
+  backupAbortController = null;
+  pendingBackupSecret = '';
+  pendingBackupRenderToken = -1;
+  completedBackupUrl = '';
+  completedBackupRenderToken = -1;
+  clearBackupPresentation();
+  const button = $('cloudBackup');
+  if (!button) return;
+  button.disabled = true;
+  button.dataset.done = 'false';
+  button.dataset.retry = 'false';
+  button.textContent = '☁ 等待目前拍貼合成';
+  $('backupPanel').hidden = true;
+}
+
+function closeDownloadMenu() {
+  $('downloadMenu').hidden = true;
+  $('stripDownload').setAttribute('aria-expanded', 'false');
+}
+
+function downloadItem(src, filename) {
+  const link = document.createElement('a');
+  link.href = src;
+  link.download = filename;
+  link.hidden = true;
+  document.body.append(link);
+  link.click();
+  link.remove();
+}
+
+function createDownloadOption({ src, title, detail, filename, contain = false, mirrored = false, onDownload = null, onActivate = null }) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'download-option' + (contain ? ' contain-preview' : '');
+  const preview = document.createElement('img');
+  preview.src = src;
+  preview.alt = '';
+  if (mirrored) preview.style.transform = 'scaleX(-1)';
+  const copy = document.createElement('span');
+  copy.className = 'download-copy';
+  const name = document.createElement('strong');
+  name.textContent = title;
+  const meta = document.createElement('small');
+  meta.textContent = detail;
+  copy.append(name, meta);
+  const icon = document.createElement('span');
+  icon.className = 'download-icon';
+  icon.textContent = '↧';
+  button.append(preview, copy, icon);
+  button.addEventListener('click', () => {
+    if (onActivate) {
+      void onActivate(button, meta, icon);
+      return;
+    }
+    downloadItem(src, filename);
+    if (onDownload) onDownload(button, meta);
+  });
+  return button;
+}
+
+function markCompleteDownload(button, meta, detail = '已下載 · 可再次下載') {
+  stripDownloaded = true;
+  retakeArmed = false;
+  $('stripHint').hidden = true;
+  $('stripDownload').dataset.done = 'true';
+  $('stripDownload').textContent = '✓ 已下載 · 更多檔案';
+  button.dataset.done = 'true';
+  meta.textContent = detail;
+}
+
+function renderDownloadOptions() {
+  const renderToken = stripRenderToken;
+  const stamp = Date.now();
+  const options = [];
+  options.push(createDownloadOption({
+    src: stripDataUrl,
+    title: '完整拍貼',
+    detail: `${FORMATS[cutsTotal].name} · ${FRAME_LABELS[selectedFrameId]}框 · PNG`,
+    filename: `aidentity_${cutsTotal}cuts_${selectedFrameId}_${stamp}.png`,
+    contain: true,
+    onDownload: (button, meta) => {
+      markCompleteDownload(button, meta);
+    },
+  }));
+  if (shots.length === cutsTotal) {
+    const revision = shotsRevision;
+    const format = cutsTotal;
+    const frameId = selectedFrameId;
+    const shotList = shots.slice();
+    const feeling = $('stylePrompt').value.trim().replace(/\s+/g, ' ').slice(0, 20);
+    const cacheKey = `${revision}:${format}:${frameId}`;
+    const filename = `aidentity_${format}cuts_${frameId}_${stamp}_live.gif`;
+    const isStale = () => renderToken !== stripRenderToken || revision !== shotsRevision || format !== cutsTotal || frameId !== selectedFrameId;
+    options.push(createDownloadOption({
+      src: stripDataUrl,
+      title: '原況拍貼 GIF',
+      detail: `${FORMATS[format].name} · ${FRAME_LABELS[frameId]}框 · GIF`,
+      filename,
+      contain: true,
+      onActivate: async (button, meta, icon) => {
+        if (button.disabled) return;
+        button.disabled = true;
+        button.setAttribute('aria-busy', 'true');
+        button.dataset.done = 'false';
+        meta.textContent = '原況 GIF 合成中…';
+        icon.textContent = '…';
+        try {
+          await new Promise(resolve => requestAnimationFrame(resolve));
+          if (isStale()) return;
+          const blob = await getFramedLiveGif(cacheKey, shotList, format, frameId, feeling);
+          if (isStale()) return;
+          const url = URL.createObjectURL(blob);
+          downloadItem(url, filename);
+          setTimeout(() => URL.revokeObjectURL(url), 5000);
+          markCompleteDownload(button, meta, '已下載 · 原況拍貼 GIF');
+          icon.textContent = '✓';
+        } catch (error) {
+          if (isStale()) return;
+          meta.textContent = 'GIF 生成失敗，請再試一次';
+          icon.textContent = '↻';
+          $('status').textContent = `GIF 生成失敗:${error.message}`;
+        } finally {
+          if (!isStale()) {
+            button.disabled = false;
+            button.removeAttribute('aria-busy');
+          }
+        }
+      },
+    }));
+  }
+  shots.forEach((item, index) => {
+    options.push(createDownloadOption({
+      src: item.photo,
+      title: `你拍的 ${index + 1}`,
+      detail: `第 ${index + 1} 張 · JPG`,
+      filename: `aidentity_${stamp}_cut${index + 1}_photo.jpg`,
+    }));
+    if (item.ghost) {
+      const ext = item.ghost.startsWith('data:image/png') ? 'png' : 'jpg';
+      options.push(createDownloadOption({
+        src: item.ghost,
+        title: `AI 提案 ${index + 1}`,
+        detail: `第 ${index + 1} 張 · ${ext.toUpperCase()}`,
+        filename: `aidentity_${stamp}_cut${index + 1}_ghost.${ext}`,
+        mirrored: item.ghostMirrored,
+      }));
+    }
+  });
+  const container = $('downloadOptions');
+  container.replaceChildren(...options);
+  container.dataset.renderToken = String(stripRenderToken);
+}
+
+function dataUrlToBlob(dataUrl) {
+  const match = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=\s]+)$/.exec(dataUrl || '');
+  if (!match) throw new Error('圖片資料格式不正確');
+  const binary = atob(match[2].replace(/\s+/g, ''));
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return new Blob([bytes], { type: match[1] });
+}
+
+async function apiJson(response) {
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error?.message || `HTTP ${response.status}`);
+  return data;
+}
+
+function backupIsCurrent({ renderToken, revision, format, frameId }) {
+  return renderToken === stripRenderToken &&
+    revision === shotsRevision &&
+    format === cutsTotal &&
+    frameId === selectedFrameId &&
+    Boolean(stripDataUrl);
+}
+
+function staleBackupError() {
+  const error = new Error('拍貼版本已更新');
+  error.name = 'StaleBackupError';
+  return error;
+}
+
+async function ensureBackupSecret(renderToken, signal) {
+  if (pendingBackupSecret && pendingBackupRenderToken === renderToken) return pendingBackupSecret;
+  const response = await fetch('/api/cuts-backups/token', { method: 'POST', signal });
+  const data = await apiJson(response);
+  if (!data.secret) throw new Error('備份連結建立失敗');
+  pendingBackupSecret = data.secret;
+  pendingBackupRenderToken = renderToken;
+  return data.secret;
+}
+
+function backupMetadata(shotList, format, frameId) {
+  return {
+    schemaVersion: 1,
+    cutsTotal: format,
+    frameId,
+    shots: shotList.map((shot, index) => ({
+      index: index + 1,
+      generated: Boolean(shot.ghost && shot.proposal),
+      promptInputRaw: shot.promptInputRaw || '',
+      cameraFacing: shot.cameraFacing || null,
+      capturedMirrored: Boolean(shot.capturedMirrored),
+      ghostMirrored: Boolean(shot.ghostMirrored),
+      proposal: shot.ghost && shot.proposal ? { ...shot.proposal } : null,
+    })),
+  };
+}
+
+function renderCompletedBackup(data, renderToken) {
+  completedBackupUrl = data.backupUrl;
+  completedBackupRenderToken = renderToken;
+  $('backupQr').innerHTML = data.qrSvg || '';
+  $('backupLink').href = data.backupUrl;
+  $('backupLink').textContent = data.backupUrl;
+  $('backupOpen').href = data.backupUrl;
+  $('backupStatus').textContent = `已保存 ${data.manifest?.files?.length || 0} 個檔案與每張 prompt。請保存下方連結或 QR code。`;
+  $('backupPanel').hidden = true;
+  const button = $('cloudBackup');
+  button.disabled = false;
+  button.dataset.done = 'true';
+  button.dataset.retry = 'false';
+  button.textContent = '☁ 顯示 QR code 與連結';
+  $('status').textContent = '✓ 雲端備份已準備完成，點按鈕顯示 QR code';
+}
+
+async function startCloudBackup() {
+  const button = $('cloudBackup');
+  if (!stripDataUrl || shots.length !== cutsTotal) return;
+  if (completedBackupRenderToken === stripRenderToken && completedBackupUrl) return;
+  if (backupAbortController) return;
+
+  const snapshot = {
+    renderToken: stripRenderToken,
+    revision: shotsRevision,
+    format: cutsTotal,
+    frameId: selectedFrameId,
+  };
+  const shotList = shots.slice();
+  const finalDataUrl = stripDataUrl;
+  const feeling = $('stylePrompt').value.trim().replace(/\s+/g, ' ').slice(0, 20);
+  const gifCacheKey = `${snapshot.revision}:${snapshot.format}:${snapshot.frameId}`;
+  backupAbortController?.abort();
+  const controller = new AbortController();
+  backupAbortController = controller;
+  button.disabled = true;
+  button.dataset.done = 'false';
+  button.dataset.retry = 'false';
+  button.textContent = '☁ QR code 準備中…';
+  $('backupPanel').hidden = true;
+
+  try {
+    const [secret, liveGif] = await Promise.all([
+      ensureBackupSecret(snapshot.renderToken, controller.signal),
+      getFramedLiveGif(gifCacheKey, shotList, snapshot.format, snapshot.frameId, feeling),
+    ]);
+    if (!backupIsCurrent(snapshot)) throw staleBackupError();
+
+    const form = new FormData();
+    form.append('metadata', JSON.stringify(backupMetadata(shotList, snapshot.format, snapshot.frameId)));
+    shotList.forEach((shot, index) => {
+      const photo = dataUrlToBlob(shot.photo);
+      form.append(`photo-${index + 1}`, photo, `photo-${index + 1}.${photo.type === 'image/png' ? 'png' : photo.type === 'image/webp' ? 'webp' : 'jpg'}`);
+      if (shot.ghost && shot.proposal) {
+        const ghost = dataUrlToBlob(shot.ghost);
+        form.append(`ghost-${index + 1}`, ghost, `ghost-${index + 1}.${ghost.type === 'image/png' ? 'png' : ghost.type === 'image/webp' ? 'webp' : 'jpg'}`);
+      }
+    });
+    form.append('final', dataUrlToBlob(finalDataUrl), 'final.png');
+    form.append('liveGif', liveGif, 'live.gif');
+    button.textContent = '☁ QR code 準備中…';
+
+    const response = await fetch('/api/cuts-backups', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${secret}` },
+      body: form,
+      signal: controller.signal,
+    });
+    const data = await apiJson(response);
+    if (!backupIsCurrent(snapshot)) throw staleBackupError();
+    renderCompletedBackup(data, snapshot.renderToken);
+  } catch (error) {
+    if (error.name === 'AbortError' || error.name === 'StaleBackupError' || !backupIsCurrent(snapshot)) return;
+    button.disabled = false;
+    button.textContent = '↻ 雲端備份失敗，點此重試';
+    button.dataset.retry = 'true';
+    $('backupPanel').hidden = true;
+    clearBackupPresentation();
+    $('backupStatus').textContent = `備份失敗：${error.message}`;
+    $('status').textContent = `雲端備份失敗：${error.message}`;
+  } finally {
+    if (backupAbortController === controller) backupAbortController = null;
+  }
+}
+
+$('cloudBackup').addEventListener('click', () => {
+  const button = $('cloudBackup');
+  if (button.disabled || !stripDataUrl || shots.length !== cutsTotal) return;
+  if (completedBackupRenderToken === stripRenderToken && completedBackupUrl) {
+    $('backupPanel').hidden = false;
+    button.textContent = '✓ QR code 與連結已顯示';
+    requestAnimationFrame(() => $('backupPanel').scrollIntoView({ block: 'nearest' }));
+    return;
+  }
+  if (button.dataset.retry === 'true') void startCloudBackup();
+});
+
+$('backupCopy').addEventListener('click', async () => {
+  if (!completedBackupUrl) return;
+  try {
+    await navigator.clipboard.writeText(completedBackupUrl);
+  } catch {
+    const input = Object.assign(document.createElement('textarea'), { value: completedBackupUrl });
+    input.style.position = 'fixed';
+    input.style.opacity = '0';
+    document.body.append(input);
+    input.select();
+    document.execCommand('copy');
+    input.remove();
+  }
+  $('backupStatus').textContent = '✓ 連結已複製。任何取得此連結的人都能查看完整備份。';
+});
+
+$('downloadClose').addEventListener('click', closeDownloadMenu);
+
+$('stripDownload').addEventListener('click', () => {
+  const download = $('stripDownload');
+  if (!stripDataUrl || download.disabled) return;
+  const menu = $('downloadMenu');
+  const opening = menu.hidden;
+  if (opening && $('downloadOptions').dataset.renderToken !== String(stripRenderToken)) renderDownloadOptions();
+  menu.hidden = !opening;
+  download.setAttribute('aria-expanded', String(opening));
+  if (opening) requestAnimationFrame(() => menu.scrollIntoView({ block: 'nearest' }));
+});
+
+$('stripRetake').addEventListener('click', () => {
+  if (!stripDownloaded && !retakeArmed) {
+    closeDownloadMenu();
+    retakeArmed = true;
+    $('stripHint').hidden = false;
+    setTimeout(() => { retakeArmed = false; $('stripHint').hidden = true; }, 6000);
+    return;
+  }
+  stripRenderToken += 1;
+  stripDataUrl = '';
+  resetShots();
+  stopLivePhotoCapture();
+  closeDownloadMenu();
+  resumeLivePreview();
+  showScreen('layout');
+});
+
+/* ---- 視覺控制項 → 引擎原生控制項 ---- */
+const op = $('op'), opVal = $('opVal');
+const syncHud = () => {
+  opVal.textContent = `${op.value}%`;
+  $('hudR').textContent = `${FORMATS[cutsTotal].ratio} · ${op.value}%`;
+};
+op.addEventListener('input', syncHud);
+syncHud();
+
+const filterSelect = $('filterSelect');
+const SWATCH = {
+  original: 'radial-gradient(60% 46% at 50% 40%,#c9b8a6,#a8917c 60%,#23262e)',
+  cream: 'linear-gradient(135deg,#fff3e2,#e3cdb2)',
+  photogray: 'linear-gradient(135deg,#e8edf2,#8e9aa6)',
+  peach: 'linear-gradient(135deg,#ffdcd2,#e0a291)',
+  'matte-mono': 'linear-gradient(135deg,#d8d8d8,#4a4a4a)',
+  y2k: 'linear-gradient(135deg,#ff7ae0,#b0f000)',
+  vivid: 'linear-gradient(135deg,#ffd36e,#ff5f6d)',
+  warm: 'linear-gradient(135deg,#ffd9a0,#b06b33)',
+  cool: 'linear-gradient(135deg,#cfe4ff,#4a6fa5)',
+  film: 'linear-gradient(135deg,#d8c6ad,#6f6250)',
+  mono: 'linear-gradient(135deg,#ddd,#333)',
+};
+function renderStrip() {
+  $('filterStrip').replaceChildren(...FILTER_PRESETS.map(preset => {
+    const item = document.createElement('div');
+    item.className = 'filt' + (preset.id === filterSelect.value ? ' on' : '');
+    item.dataset.filter = preset.id;
+    const swatch = document.createElement('div');
+    swatch.className = 'sw';
+    swatch.style.background = SWATCH[preset.id] || 'var(--paper-3)';
+    const name = document.createElement('div');
+    name.className = 'fn';
+    name.textContent = preset.label;
+    item.append(swatch, name);
+    item.addEventListener('click', () => { filterSelect.value = preset.id; fire(filterSelect); renderStrip(); });
+    return item;
+  }));
+}
+// module script 依文件順序執行,引擎已跑完並填好 filterSelect;不可用 rAF 延後(背景分頁不觸發)
+renderStrip();
+
+const timerSelect = $('timerSelect'), timerChoice = $('timerChoice');
+// /cuts 預設 15 秒(引擎預設 5;僅在沒有既存偏好時覆寫)
+if (!localStorage.getItem('shutter_timer')) { timerSelect.value = '15'; fire(timerSelect); }
+timerChoice.value = timerSelect.value;
+timerChoice.addEventListener('change', () => {
+  timerSelect.value = timerChoice.value;
+  fire(timerSelect);
+});
+
+function cycler(button, select, labelOf) {
+  const show = option => {
+    button.textContent = labelOf(option);
+    if (select.id === 'formSelect') {
+      button.title = `幽靈形式：${option.textContent}`;
+      button.setAttribute('aria-label', `幽靈形式：${option.textContent}`);
+    }
+  };
+  button.addEventListener('click', () => {
+    const options = [...select.options];
+    const next = options[(options.findIndex(o => o.value === select.value) + 1) % options.length];
+    select.value = next.value;
+    fire(select);
+    show(next);
+  });
+  const current = [...select.options].find(o => o.value === select.value);
+  if (current) show(current);
+}
+cycler($('formCycle'), $('formSelect'), option => option.dataset.cycleLabel || option.textContent);
+cycler($('effectCycle'), $('effectSelect'), option => option.textContent);
+</script>
+</body>
+</html>

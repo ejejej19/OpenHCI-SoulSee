@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="(AI)dentity AI 拍貼機——讓 AI 提出一個幽靈，再拍出你的版本。">
+<title>(AI)dentity — AI 拍貼機</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@700;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --acid:#b0f000;
+    --blue:#1500ff;
+    --ink:#0a0a0a;
+    --paper:#fff;
+    --muted:#6c6c66;
+    --display:"Instrument Serif","Noto Serif TC",serif;
+    --cjk:"Noto Serif TC",serif;
+    --mono:"Space Mono","Noto Sans TC",monospace;
+    --body:"Noto Sans TC",sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%;background:var(--paper);color:var(--ink)}
+  body{font-family:var(--body);-webkit-font-smoothing:antialiased}
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;opacity:.42;
+    background:
+      linear-gradient(90deg,transparent calc(50% - .5px),#e6e6e1 calc(50% - .5px),#e6e6e1 calc(50% + .5px),transparent calc(50% + .5px)),
+      linear-gradient(#f3f3ef 1px,transparent 1px);
+    background-size:100% 100%,100% 72px;
+  }
+  .page{position:relative;min-height:100svh;max-width:1180px;margin:0 auto;padding:24px clamp(20px,5vw,64px) 22px;display:flex;flex-direction:column}
+  header{display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid var(--ink);padding-bottom:16px}
+  .brand{font-family:var(--display);font-size:clamp(27px,4vw,38px);line-height:1;text-decoration:none;color:var(--ink)}
+  .brand b{color:var(--blue);font-weight:400}
+  .edition{font-family:var(--mono);font-size:10px;letter-spacing:1.5px;text-align:right}
+  main{flex:1;display:grid;grid-template-columns:minmax(0,1.12fr) minmax(300px,.88fr);gap:clamp(34px,7vw,92px);align-items:center;padding:clamp(42px,8vh,88px) 0}
+  .kicker{font-family:var(--mono);font-size:10px;letter-spacing:1.35px;margin-bottom:22px;display:flex;align-items:center;gap:9px}
+  .kicker::before{content:"";width:10px;height:10px;background:var(--acid);border:1.5px solid var(--ink)}
+  h1{font-family:var(--cjk);font-size:clamp(54px,8.5vw,112px);font-weight:900;line-height:.94;letter-spacing:-.055em;margin:0;max-width:720px}
+  h1 span{color:var(--blue)}
+  .lead{font-size:clamp(15px,1.7vw,19px);line-height:1.8;max-width:580px;margin:28px 0 30px}
+  .cta{display:flex;align-items:center;justify-content:space-between;width:min(100%,430px);min-height:80px;padding:0 24px;background:var(--acid);border:3px solid var(--ink);box-shadow:8px 8px 0 var(--blue);color:var(--ink);text-decoration:none;font-family:var(--cjk);font-size:22px;font-weight:900;transition:transform .14s ease,box-shadow .14s ease}
+  .cta span{font-family:var(--mono);font-size:27px}
+  .cta:hover,.cta:focus-visible{transform:translate(4px,4px);box-shadow:4px 4px 0 var(--blue)}
+  .cta:focus-visible{outline:3px solid var(--blue);outline-offset:5px}
+  .facts{display:flex;flex-wrap:wrap;gap:9px 18px;margin-top:23px;color:var(--muted);font-family:var(--mono);font-size:9px;letter-spacing:.65px}
+  .facts span::before{content:"·";color:var(--blue);margin-right:7px;font-weight:700}
+  .visual{position:relative;width:min(100%,430px);justify-self:end;aspect-ratio:3/4;border:3px solid var(--ink);background:#f1f1ee;padding:clamp(15px,3vw,26px)}
+  .visual::before{content:"";position:absolute;width:29%;aspect-ratio:1;background:var(--acid);left:-18px;top:-18px;z-index:-1}
+  .visual::after{content:"AI GHOST";position:absolute;right:-2px;bottom:-32px;background:var(--blue);color:#fff;padding:8px 13px;font-family:var(--mono);font-size:9px;letter-spacing:1.3px}
+  .viewfinder{position:relative;height:100%;overflow:hidden;background:linear-gradient(145deg,#d8d8d3 0%,#f8f8f5 47%,#c9c9c4 100%)}
+  .viewfinder::before,.viewfinder::after{content:"";position:absolute;inset:13px;border:2px solid var(--ink)}
+  .viewfinder::after{inset:50% auto auto 50%;width:28%;height:39%;border:2px solid var(--blue);border-radius:48% 48% 38% 38%;transform:translate(-50%,-47%) rotate(-5deg);box-shadow:0 0 0 10px rgb(21 0 255 / 8%)}
+  .ghost-head{position:absolute;left:50%;top:28%;width:27%;aspect-ratio:1;border:3px solid var(--blue);border-radius:50%;transform:translateX(-50%)}
+  .ghost-body{position:absolute;left:50%;top:51%;width:48%;height:37%;border:3px solid var(--blue);border-radius:48% 48% 12% 12%;transform:translateX(-50%) rotate(4deg)}
+  .corner{position:absolute;width:20px;height:20px;border-color:var(--acid);border-style:solid}
+  .corner.a{left:24px;top:24px;border-width:3px 0 0 3px}.corner.b{right:24px;top:24px;border-width:3px 3px 0 0}.corner.c{left:24px;bottom:24px;border-width:0 0 3px 3px}.corner.d{right:24px;bottom:24px;border-width:0 3px 3px 0}
+  footer{display:flex;align-items:center;justify-content:space-between;gap:20px;border-top:1.5px solid var(--ink);padding-top:14px;font-family:var(--mono);font-size:9px;letter-spacing:.8px}
+  footer a{color:var(--muted);text-underline-offset:4px}
+  footer a:hover,footer a:focus-visible{color:var(--blue)}
+  @media(max-width:760px){
+    .page{padding-top:18px}.edition{font-size:8px}main{grid-template-columns:1fr;padding:44px 0 62px}.visual{width:min(76%,330px);justify-self:center;order:-1}h1{font-size:clamp(52px,16vw,82px)}.lead{font-size:14px}.cta{min-height:72px;font-size:20px}footer{align-items:flex-start;flex-direction:column-reverse;gap:9px}
+  }
+  @media(prefers-reduced-motion:reduce){.cta{transition:none}}
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <a class="brand" href="/" aria-label="(AI)dentity 首頁">(<b>AI</b>)dentity</a>
+    <div class="edition">OPENHCI · 2026<br>AI PHOTO BOOTH</div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="kicker">CAMERA REQUIRED · 建議使用手機</div>
+      <h1>看見<br><span>另一個自己</span></h1>
+      <p class="lead">讓 AI 先提出一個幽靈，你再決定要靠近、偏離，或拍出自己的版本。</p>
+      <a class="cta" href="/cuts">開始拍貼 <span aria-hidden="true">→</span></a>
+      <div class="facts" aria-label="拍貼功能">
+        <span>一格或兩格</span><span>預設前鏡頭</span><span>完成後下載拍貼</span>
+      </div>
+    </section>
+
+    <div class="visual" aria-hidden="true">
+      <div class="viewfinder">
+        <i class="ghost-head"></i><i class="ghost-body"></i>
+        <i class="corner a"></i><i class="corner b"></i><i class="corner c"></i><i class="corner d"></i>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <span>© OPENHCI 第六組 · (AI)DENTITY</span>
+    <a href="/archive/">查看封存的舊版 PoC 集 ↗</a>
+  </footer>
+</div>
+</body>
+</html>

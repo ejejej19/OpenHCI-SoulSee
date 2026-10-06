@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<!--
+  AI 幽靈拍攝頁。此頁只處理拍攝當下的動作、位置、構圖與機位。
+  原始照片以 Blob 保存到 IndexedDB，再交給獨立後製頁。
+-->
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI 幽靈拍攝</title>
+<style>
+  body{margin:0;font-family:"PingFang TC",sans-serif;background:#000;color:#eee;display:flex;flex-direction:column;height:100vh;height:100dvh}
+  #setup{padding:10px;background:#1c1c1e;display:grid;gap:8px}
+  .step-header{display:flex;align-items:center;justify-content:space-between;color:#f2f2f7;font-size:13px}
+  .step-header span{color:#8e8e93;font-variant-numeric:tabular-nums}
+  .setup-row{display:flex;gap:8px;align-items:center}
+  #setup input,#stylePrompt{box-sizing:border-box;padding:8px;border-radius:8px;border:1px solid #444;background:#2c2c2e;color:#eee}
+  #setup input{flex:1;min-width:0}
+  #setup button{padding:8px 14px;border-radius:8px;border:none;background:#0a84ff;color:#fff}
+  #styleBox{display:grid;gap:4px}
+  #styleBox span{font-size:12px;color:#8e8e93}
+  #styleBox small{color:#6f6f75}
+  #stylePrompt{width:100%;min-height:44px;max-height:76px;resize:vertical;line-height:1.35}
+  #stylePrompt::placeholder{color:#777}
+  #intentProfileBar{display:flex;gap:8px;align-items:center;justify-content:space-between}
+  #intentProfileStatus{min-width:0;color:#8e8e93;font-size:12px;line-height:1.35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #intentProfileStatus[data-state="confirmed"]{color:#30d158}
+  #reviewIntent{min-height:36px;padding:0 12px;border:1px solid #48484a;border-radius:8px;background:transparent;color:#f2f2f7;font-size:12px;font-weight:700;white-space:nowrap}
+  #intentDialog{width:min(720px,calc(100vw - 24px));max-height:min(88dvh,760px);padding:0;border:1px solid #48484a;border-radius:8px;background:#1c1c1e;color:#f2f2f7;box-shadow:0 20px 70px rgba(0,0,0,.55)}
+  #intentDialog::backdrop{background:rgba(0,0,0,.72);backdrop-filter:blur(4px)}
+  #intentForm{display:grid;grid-template-rows:auto minmax(0,1fr) auto;max-height:inherit}
+  .intent-dialog-head{padding:16px 18px 10px;border-bottom:1px solid #3a3a3c}
+  .intent-dialog-head h2{margin:0;font-size:18px;letter-spacing:0}
+  #intentSourcePrompt{margin:6px 0 0;color:#8e8e93;font-size:12px;line-height:1.4;overflow-wrap:anywhere}
+  .intent-dialog-body{padding:14px 18px;overflow:auto}
+  #intentFields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 12px}
+  .intent-field{display:grid;gap:5px;color:#aeaeb2;font-size:12px}
+  .intent-field input{box-sizing:border-box;width:100%;min-width:0;height:40px;padding:0 10px;border:1px solid #48484a;border-radius:8px;background:#2c2c2e;color:#f2f2f7;font:inherit;font-size:14px}
+  #intentPriorities{margin:16px 0 0;padding:0;border:0}
+  #intentPriorities legend{padding:0;color:#f2f2f7;font-size:13px;font-weight:700}
+  #intentPriorities small{color:#8e8e93;font-weight:400}
+  .priority-options{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px 10px;margin-top:9px}
+  .priority-option{display:flex;gap:7px;align-items:center;min-height:28px;color:#d1d1d6;font-size:12px}
+  .priority-option input{width:17px;height:17px;margin:0;accent-color:#0a84ff}
+  .priority-option:has(input:disabled){opacity:.45}
+  #intentActions{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid #3a3a3c}
+  #intentActions button{min-height:40px;padding:0 15px;border:1px solid #48484a;border-radius:8px;background:transparent;color:#f2f2f7;font-weight:700}
+  #confirmIntent{border-color:#0a84ff!important;background:#0a84ff!important;color:#fff!important}
+  #stage{position:relative;flex:1;min-height:0;overflow:hidden}
+  video{width:100%;height:100%;object-fit:cover;display:block}
+  video.is-front-camera,#ghost.is-front-camera,#resGhost.is-front-camera{transform:scaleX(-1)}
+  .camera-switch{position:absolute;top:12px;left:50%;z-index:4;transform:translateX(-50%);width:152px;padding:3px;display:grid;grid-template-columns:1fr 1fr;gap:3px;background:rgba(28,28,30,.86);border:1px solid rgba(255,255,255,.16);border-radius:8px;backdrop-filter:blur(10px)}
+  .camera-switch button{min-width:0;min-height:44px;border:0;border-radius:6px;background:transparent;color:#c7c7cc;font-size:12px;font-weight:600;white-space:nowrap}
+  .camera-switch button[aria-pressed="true"]{background:#fff;color:#111}
+  .camera-switch button:disabled{opacity:.5}
+  #ghost{position:absolute;inset:0;z-index:2;width:100%;height:100%;object-fit:cover;opacity:.45;display:none;pointer-events:none}
+  #meter{position:absolute;top:12px;right:12px;z-index:4;min-width:186px;background:rgba(0,0,0,.72);border:1px solid rgba(255,255,255,.16);border-radius:8px;padding:10px 12px;text-align:center;display:none;backdrop-filter:blur(10px)}
+  #meter .state{font-size:20px;font-weight:800;color:#ff453a}
+  #meter[data-band="close"] .state{color:#ffd60a}
+  #meter[data-band="matched"] .state{color:#30d158}
+  #meter[data-band="unavailable"] .state{color:#c7c7cc;font-size:14px}
+  #meter .components{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:7px 0 5px;font-size:11px;color:#ddd}
+  #meter .components span{padding-top:5px;border-top:1px solid rgba(255,255,255,.14);white-space:nowrap}
+  #meter .lbl{font-size:11px;color:#aaa}
+  #spin{position:absolute;top:12px;left:12px;z-index:4;background:rgba(0,0,0,.65);border-radius:8px;padding:8px 12px;font-size:13px;display:none}
+  #compositionGuides{position:absolute;inset:0;z-index:3;pointer-events:none}
+  #compositionGuides[hidden]{display:none}
+  .thirds-line{position:absolute;background:rgba(255,255,255,.42);filter:drop-shadow(0 0 1px #000)}
+  .thirds-line.vertical{top:0;bottom:0;width:1px}
+  .thirds-line.horizontal{left:0;right:0;height:1px}
+  .thirds-line:nth-child(1){left:33.333%}.thirds-line:nth-child(2){left:66.666%}
+  .thirds-line:nth-child(3){top:33.333%}.thirds-line:nth-child(4){top:66.666%}
+  #targetHorizon{position:absolute;left:-8%;width:116%;height:2px;background:#64d2ff;box-shadow:0 0 0 1px rgba(0,0,0,.42);transform-origin:center}
+  #targetHorizon::after{content:"AI";position:absolute;right:8%;top:-18px;color:#64d2ff;font-size:11px;font-weight:800;text-shadow:0 1px 2px #000}
+  #guideControls{position:absolute;left:12px;bottom:12px;z-index:4;display:flex;gap:6px;align-items:center}
+  #guideControls button{min-height:44px;padding:0 13px;border:1px solid rgba(255,255,255,.22);border-radius:8px;background:rgba(28,28,30,.82);color:#fff;font-size:12px;font-weight:700;backdrop-filter:blur(10px)}
+  #guideControls button[hidden]{display:none}
+  #guideToggle[aria-pressed="true"],#pauseGuidance[aria-pressed="true"]{background:#fff;color:#111}
+  #guideHint{position:absolute;left:50%;bottom:12px;z-index:4;transform:translateX(-50%);max-width:min(54vw,360px);padding:8px 12px;border-radius:8px;background:rgba(0,0,0,.76);color:#fff;font-size:13px;font-weight:700;text-align:center;white-space:normal;backdrop-filter:blur(10px)}
+  #guideHint[hidden]{display:none}
+  #dock{padding:10px;background:#1c1c1e;display:flex;gap:10px;align-items:center}
+  #dock button{padding:10px 16px;border:none;border-radius:10px;font-size:15px;font-weight:600}
+  #summon{background:#bf5af2;color:#fff} #shoot{background:#fff;color:#000}
+  #dock button:disabled{opacity:.5}
+  #op{width:110px}
+  #status{font-size:12px;color:#8e8e93;flex:1}
+  #result{position:absolute;inset:0;z-index:5;background:#000;display:none;grid-template-columns:1fr 1fr;grid-template-rows:minmax(0,1fr) auto;gap:2px}
+  #result[data-mode="solo"]{grid-template-columns:1fr;grid-template-rows:1fr}
+  #result[data-mode="solo"] img{object-fit:contain}
+  .result-image{position:relative;min-width:0;min-height:0;overflow:hidden}
+  #result img{width:100%;height:100%;object-fit:cover}
+  #result .cap{position:absolute;bottom:10px;font-size:13px;background:rgba(0,0,0,.7);padding:4px 10px;border-radius:8px}
+  #resultActions{position:absolute;top:10px;right:10px;z-index:2;display:flex;gap:8px}
+  #resultActions button{min-height:40px;padding:0 13px;border:1px solid rgba(255,255,255,.24);border-radius:8px;background:rgba(0,0,0,.78);color:#fff;font-weight:700}
+  #editPhoto{border-color:#0a84ff!important;background:#0a84ff!important}
+  #editPhoto:disabled{opacity:.5}
+  #intentReceipt{grid-column:1/-1;padding:10px 12px 12px;background:#1c1c1e;border-top:1px solid #3a3a3c;display:grid;gap:8px;max-height:40dvh;overflow:auto}
+  #intentReceipt[hidden]{display:none}
+  .receipt-head{display:flex;gap:8px;align-items:baseline;justify-content:space-between}
+  #receiptBand{font-size:15px;font-weight:800}
+  #receiptBand[data-band="aligned"]{color:#30d158}#receiptBand[data-band="partial"]{color:#ffd60a}#receiptBand[data-band="drifted"]{color:#ff453a}#receiptBand[data-band="unavailable"]{color:#aeaeb2}
+  #receiptCoverage{color:#8e8e93;font-size:11px;white-space:nowrap}
+  #receiptPrompt{margin:0;color:#d1d1d6;font-size:12px;line-height:1.35;overflow-wrap:anywhere}
+  #receiptDimensions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+  .receipt-dimension{padding:7px 8px;border-left:3px solid #636366;background:#2c2c2e;min-width:0}
+  .receipt-dimension[data-band="aligned"]{border-color:#30d158}.receipt-dimension[data-band="partial"]{border-color:#ffd60a}.receipt-dimension[data-band="drifted"]{border-color:#ff453a}
+  .receipt-dimension strong,.receipt-dimension span{display:block;font-size:11px;line-height:1.3}
+  .receipt-dimension span{color:#aeaeb2;margin-top:2px}
+  #intentJudgment{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:#48484a;border:1px solid #48484a;border-radius:8px;overflow:hidden}
+  #intentJudgment button{min-height:38px;border:0;background:#2c2c2e;color:#f2f2f7;font-size:12px;font-weight:700}
+  #intentJudgment button[aria-pressed="true"]{background:#fff;color:#111}
+  @media (max-width:560px){
+    .setup-row{align-items:stretch}
+    #setup button{white-space:nowrap}
+    #meter,#spin{top:70px}
+    #meter{min-width:166px;padding-left:8px;padding-right:8px}
+    #guideHint{bottom:64px;max-width:72vw}
+    #dock{display:grid;grid-template-columns:auto minmax(72px,1fr) auto;gap:8px 10px}
+    #op{width:100%;min-width:72px}
+    #status{grid-column:1/-1;min-width:0;line-height:1.35}
+    #receiptDimensions{grid-template-columns:repeat(2,minmax(0,1fr))}
+    #intentFields{grid-template-columns:1fr}
+    .priority-options{grid-template-columns:repeat(2,minmax(0,1fr))}
+  }
+</style>
+</head>
+<body>
+<div id="setup">
+  <div class="step-header"><strong>拍攝</strong><span>1 / 2</span></div>
+  <div class="setup-row">
+    <input id="key" type="password" placeholder="Gemini API key(留空=用網站內建)">
+    <button id="start">開啟相機</button>
+  </div>
+  <label id="styleBox" for="stylePrompt">
+    <span>拍攝與後製意圖 <small>先確認，再分階段完成</small></span>
+    <textarea id="stylePrompt" maxlength="280" placeholder="例：電影感、冷色調、像底片旅拍，但保留真實場景"></textarea>
+  </label>
+  <div id="intentProfileBar">
+    <span id="intentProfileStatus" data-state="unconfirmed">拍攝意圖尚未確認</span>
+    <button id="reviewIntent" type="button">確認意圖</button>
+  </div>
+</div>
+
+<dialog id="intentDialog" aria-labelledby="intentDialogTitle">
+  <form id="intentForm">
+    <header class="intent-dialog-head">
+      <h2 id="intentDialogTitle">確認拍攝意圖</h2>
+      <p id="intentSourcePrompt"></p>
+    </header>
+    <div class="intent-dialog-body">
+      <div id="intentFields">
+        <label class="intent-field">主體<input type="text" data-intent-field="subject" maxlength="120"></label>
+        <label class="intent-field">人物關係<input type="text" data-intent-field="relationship" maxlength="120"></label>
+        <label class="intent-field">姿勢<input type="text" data-intent-field="pose" maxlength="120"></label>
+        <label class="intent-field">構圖<input type="text" data-intent-field="composition" maxlength="120"></label>
+        <label class="intent-field">鏡位<input type="text" data-intent-field="camera_angle" maxlength="120"></label>
+        <label class="intent-field">人物尺度<input type="text" data-intent-field="subject_scale" maxlength="120"></label>
+        <label class="intent-field">背景<input type="text" data-intent-field="background" maxlength="120"></label>
+        <label class="intent-field">色調<input type="text" data-intent-field="color" maxlength="120"></label>
+        <label class="intent-field">氛圍<input type="text" data-intent-field="mood" maxlength="120"></label>
+      </div>
+      <fieldset id="intentPriorities">
+        <legend>最重要的面向 <small>最多 3 項</small></legend>
+        <div class="priority-options">
+          <label class="priority-option"><input type="checkbox" data-intent-priority value="relationship">人物關係</label>
+          <label class="priority-option"><input type="checkbox" data-intent-priority value="pose">姿勢</label>
+          <label class="priority-option"><input type="checkbox" data-intent-priority value="composition">構圖</label>
+          <label class="priority-option"><input type="checkbox" data-intent-priority value="camera_angle">鏡位</label>
+          <label class="priority-option"><input type="checkbox" data-intent-priority value="subject_scale">人物尺度</label>
+          <label class="priority-option"><input type="checkbox" data-intent-priority value="background">背景</label>
+          <label class="priority-option"><input type="checkbox" data-intent-priority value="color">色調</label>
+          <label class="priority-option"><input type="checkbox" data-intent-priority value="mood">氛圍</label>
+        </div>
+      </fieldset>
+    </div>
+    <div id="intentActions">
+      <button id="cancelIntent" type="button">取消</button>
+      <button id="confirmIntent" type="submit">套用意圖</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="stage">
+  <video id="cam" autoplay playsinline muted></video>
+  <div class="camera-switch" role="group" aria-label="選擇鏡頭">
+    <button type="button" data-camera-facing="user" aria-pressed="false">前鏡頭</button>
+    <button type="button" data-camera-facing="environment" aria-pressed="true">後鏡頭</button>
+  </div>
+  <img id="ghost" alt="" aria-hidden="true">
+  <div id="compositionGuides" hidden aria-hidden="true">
+    <span class="thirds-line vertical"></span><span class="thirds-line vertical"></span>
+    <span class="thirds-line horizontal"></span><span class="thirds-line horizontal"></span>
+    <span id="targetHorizon" hidden></span>
+  </div>
+  <div id="guideControls" role="group" aria-label="構圖提示控制">
+    <button type="button" id="guideToggle" aria-pressed="false">構圖線</button>
+    <button type="button" id="pauseGuidance" aria-pressed="false" hidden>暫停提示</button>
+    <button type="button" id="skipHint" hidden>略過</button>
+  </div>
+  <div id="guideHint" role="status" aria-live="polite" hidden></div>
+  <div id="meter" data-band="unavailable" role="status" aria-live="polite">
+    <div class="state" id="matchState">分析中</div>
+    <div class="components"><span id="poseState">姿勢 --</span><span id="frameState">人物位置 --</span><span id="compositionState">構圖 --</span></div>
+    <div class="lbl">AI 幽靈匹配</div>
+  </div>
+  <div id="spin">AI 生成理想版中…(約 5–15 秒)</div>
+  <div id="result">
+    <div id="resultActions">
+      <button type="button" id="close">重拍</button>
+      <button type="button" id="editPhoto" disabled>進入後製</button>
+    </div>
+    <div id="realResult" class="result-image"><img id="resReal" alt="拍攝原圖"><span class="cap" style="left:10px">你拍的(真)</span></div>
+    <div id="ghostResult" class="result-image"><img id="resGhost" alt="AI 幽靈參考"><span class="cap" style="right:10px">AI 生成的(假)</span></div>
+    <section id="intentReceipt" hidden aria-label="原始意圖差異">
+      <div class="receipt-head"><strong id="receiptBand" data-band="unavailable">資料不足</strong><span id="receiptCoverage"></span></div>
+      <p id="receiptPrompt"></p>
+      <div id="receiptDimensions"></div>
+      <div id="intentJudgment" role="group" aria-label="這張照片是否符合原始意圖">
+        <button type="button" data-intent-judgment="aligned" aria-pressed="false">符合</button>
+        <button type="button" data-intent-judgment="partial" aria-pressed="false">部分符合</button>
+        <button type="button" data-intent-judgment="not_aligned" aria-pressed="false">不符合</button>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div id="dock">
+  <button id="summon">召喚幽靈</button>
+  <input id="op" type="range" min="0" max="90" value="45" title="幽靈透明度">
+  <button id="shoot">拍照</button>
+  <span id="status">未啟動</span>
+</div>
+
+<script type="module" src="/ghost-app.js"></script>
+</body>
+</html>

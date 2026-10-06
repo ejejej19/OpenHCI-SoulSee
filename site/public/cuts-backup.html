@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self'; img-src 'self' blob: data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+<title>(AI)dentity — 雲端備份</title>
+<style>
+  :root{--acid:#b0f000;--blue:#1500ff;--ink:#0a0a0a;--paper:#fff;--paper2:#f1f1ee;--muted:#666660}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%;background:var(--paper);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans TC","PingFang TC",sans-serif}
+  body{padding:calc(20px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom))}
+  main{width:min(760px,100%);margin:0 auto}
+  header{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;border-bottom:3px solid var(--ink);padding-bottom:12px;margin-bottom:18px}
+  h1{margin:0;line-height:0}h1 img{display:block;width:auto;height:30px}
+  .tag{font:11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);text-align:right}
+  .notice{border:2px solid var(--blue);background:var(--paper2);padding:12px;font-size:13px;line-height:1.6;margin-bottom:18px}
+  .notice strong{color:var(--blue)}
+  #loading,#error{border:2px solid var(--ink);padding:18px;font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace}
+  #error{background:#fff0ee;color:#9d1818}
+  [hidden]{display:none!important}
+  .share{display:grid;grid-template-columns:132px minmax(0,1fr);gap:14px;align-items:center;border:1.5px solid var(--ink);padding:12px;margin-bottom:20px}
+  #qr{width:132px;height:132px;border:1px solid var(--ink);padding:4px;background:#fff}
+  #qr img{display:block;width:100%;height:100%}
+  .share-copy{min-width:0;display:flex;flex-direction:column;gap:8px}
+  .share-copy b{font-family:Georgia,"Noto Serif TC",serif;font-size:18px}
+  #shareUrl{font:10px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--blue);word-break:break-all}
+  button,.download{border:2px solid var(--ink);background:var(--acid);color:var(--ink);font-weight:800;padding:10px 12px;text-decoration:none;text-align:center;cursor:pointer;font-size:12px}
+  .share-actions{display:flex;gap:8px}.share-actions>*{flex:1}
+  section{margin:22px 0}
+  h2{font-family:Georgia,"Noto Serif TC",serif;font-size:22px;margin:0 0 10px;border-bottom:1.5px solid var(--ink);padding-bottom:7px}
+  .hero-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .asset{border:1.5px solid var(--ink);background:var(--paper2);padding:9px;display:flex;flex-direction:column;gap:8px;min-width:0}
+  .asset img{display:block;width:100%;height:auto;max-height:520px;object-fit:contain;background:#111}
+  .asset img.photo{aspect-ratio:4/3;object-fit:cover}.asset img.mirrored{transform:scaleX(-1)}
+  .asset-head{display:flex;align-items:center;justify-content:space-between;gap:8px}.asset-head b{font-size:13px}.asset-head small{font:9px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted)}
+  .shot{border:2px solid var(--ink);padding:12px;margin-bottom:16px}
+  .shot-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}.shot-title b{font-family:Georgia,"Noto Serif TC",serif;font-size:20px}.shot-title span{font:9px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted)}
+  .shot-assets{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .prompt{margin-top:12px;border-left:4px solid var(--acid);background:var(--paper2);padding:10px}
+  .prompt-label{font:9px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--blue);letter-spacing:.8px;margin-bottom:5px}
+  .prompt-text{white-space:pre-wrap;word-break:break-word;font-size:14px;line-height:1.6}
+  .reason{margin-top:9px;border-left-color:var(--blue)}
+  details{margin-top:9px;font-size:12px}summary{cursor:pointer;color:var(--muted)}details pre{white-space:pre-wrap;word-break:break-word;background:#fff;border:1px solid #ccc;padding:9px;font:10px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
+  .manifest-row{display:flex;gap:8px;flex-wrap:wrap}.manifest-row>*{flex:1;min-width:180px}
+  @media(max-width:560px){.hero-grid,.shot-assets{grid-template-columns:1fr}.share{grid-template-columns:94px minmax(0,1fr)}#qr{width:94px;height:94px}.asset img.photo{aspect-ratio:auto;max-height:none}}
+</style>
+</head>
+<body>
+<main>
+  <header><h1><img src="/aidentity-logo-dark.png" alt="(AI)dentity" width="372" height="98"></h1><div class="tag">PRIVATE BACKUP<br><span id="createdAt"></span></div></header>
+  <div class="notice"><strong>請妥善保管這個連結。</strong>任何取得連結或 QR code 的人，都能查看並下載這次拍攝的照片、AI 提案、prompt、提案文字、完整拍貼與原況 GIF。</div>
+  <div id="loading">正在讀取完整雲端備份…</div>
+  <div id="error" hidden></div>
+  <div id="content" hidden>
+    <div class="share">
+      <div id="qr"></div>
+      <div class="share-copy">
+        <b>這就是你的備份連結</b>
+        <div id="shareUrl"></div>
+        <div class="share-actions"><button type="button" id="copy">複製連結</button><a class="download" id="manifestDownload" href="#" hidden>下載資料清單</a></div>
+      </div>
+    </div>
+    <section><h2>完成檔案</h2><div class="hero-grid" id="heroAssets"></div></section>
+    <section><h2>每張照片與 AI 提案</h2><div id="shots"></div></section>
+  </div>
+</main>
+<script>
+(() => {
+  const secret = location.hash.slice(1);
+  const loading = document.getElementById('loading');
+  const errorBox = document.getElementById('error');
+  const content = document.getElementById('content');
+  const objectUrls = [];
+  const headers = secret ? { authorization: `Bearer ${secret}` } : {};
+
+  function fail(message) {
+    loading.hidden = true;
+    content.hidden = true;
+    errorBox.textContent = message;
+    errorBox.hidden = false;
+  }
+
+  async function api(response) {
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error?.message || `HTTP ${response.status}`);
+    }
+    return response;
+  }
+
+  function objectUrl(blob) {
+    const url = URL.createObjectURL(blob);
+    objectUrls.push(url);
+    return url;
+  }
+
+  async function loadAsset(record) {
+    const response = await api(await fetch(`/api/cuts-backups/file?id=${encodeURIComponent(record.id)}`, { headers }));
+    return { record, url: objectUrl(await response.blob()) };
+  }
+
+  function assetCard(asset, title, { mirrored = false, photo = false } = {}) {
+    const box = document.createElement('article');
+    box.className = 'asset';
+    const head = document.createElement('div');
+    head.className = 'asset-head';
+    const name = document.createElement('b');
+    name.textContent = title;
+    const size = document.createElement('small');
+    size.textContent = `${asset.record.contentType.replace('image/', '').toUpperCase()} · ${(asset.record.size / 1024).toFixed(0)} KB`;
+    head.append(name, size);
+    const image = document.createElement('img');
+    image.src = asset.url;
+    image.alt = title;
+    if (mirrored) image.classList.add('mirrored');
+    if (photo) image.classList.add('photo');
+    const download = document.createElement('a');
+    download.className = 'download';
+    download.href = asset.url;
+    download.download = asset.record.filename;
+    download.textContent = `↧ 下載${title}`;
+    box.append(head, image, download);
+    return box;
+  }
+
+  function textBlock(label, value, className = 'prompt') {
+    const box = document.createElement('div');
+    box.className = className;
+    const heading = document.createElement('div');
+    heading.className = 'prompt-label';
+    heading.textContent = label;
+    const text = document.createElement('div');
+    text.className = 'prompt-text';
+    text.textContent = value || '（未輸入）';
+    box.append(heading, text);
+    return box;
+  }
+
+  async function render() {
+    if (!/^[A-Za-z0-9_-]{43}$/.test(secret)) return fail('這個備份連結不完整或格式不正確。');
+    try {
+      const manifestResponse = await api(await fetch('/api/cuts-backups', { headers }));
+      const { manifest, backupUrl } = await manifestResponse.json();
+      const assets = await Promise.all(manifest.files.map(loadAsset));
+      const byId = new Map(assets.map(asset => [asset.record.id, asset]));
+
+      document.getElementById('createdAt').textContent = new Date(manifest.createdAt).toLocaleString('zh-TW');
+      document.getElementById('shareUrl').textContent = backupUrl;
+      document.getElementById('copy').addEventListener('click', async event => {
+        try { await navigator.clipboard.writeText(backupUrl); event.currentTarget.textContent = '✓ 已複製'; }
+        catch { event.currentTarget.textContent = '請從網址列複製'; }
+      });
+
+      const qrResponse = await api(await fetch('/api/cuts-backups/qr', { headers }));
+      const qr = document.createElement('img');
+      qr.src = objectUrl(await qrResponse.blob());
+      qr.alt = '雲端備份 QR code';
+      document.getElementById('qr').append(qr);
+
+      const manifestBlob = new Blob([JSON.stringify(manifest, null, 2)], { type: 'application/json' });
+      const manifestDownload = document.getElementById('manifestDownload');
+      manifestDownload.href = objectUrl(manifestBlob);
+      manifestDownload.download = 'aidentity-backup-manifest.json';
+
+      const hero = document.getElementById('heroAssets');
+      hero.append(assetCard(byId.get('final'), '完整拍貼'));
+      hero.append(assetCard(byId.get('live-gif'), '原況拍貼 GIF'));
+
+      const shots = document.getElementById('shots');
+      manifest.shots.forEach(shot => {
+        const article = document.createElement('article');
+        article.className = 'shot';
+        const title = document.createElement('div');
+        title.className = 'shot-title';
+        const label = document.createElement('b');
+        label.textContent = `第 ${shot.index} 張`;
+        const camera = document.createElement('span');
+        camera.textContent = shot.cameraFacing === 'user' ? '前鏡頭' : shot.cameraFacing === 'environment' ? '後鏡頭' : '鏡頭未記錄';
+        title.append(label, camera);
+        const assetGrid = document.createElement('div');
+        assetGrid.className = 'shot-assets';
+        assetGrid.append(assetCard(byId.get(`photo-${shot.index}`), '你拍的照片', { photo: true }));
+        if (shot.generated && byId.has(`ghost-${shot.index}`)) {
+          assetGrid.append(assetCard(byId.get(`ghost-${shot.index}`), 'AI 提案', { mirrored: shot.ghostMirrored, photo: true }));
+        }
+        article.append(title, assetGrid, textBlock('USER PROMPT · 當時輸入', shot.promptInputRaw));
+        if (shot.proposal) {
+          article.append(textBlock('AI 提案文字', shot.proposal.reason, 'prompt reason'));
+          const details = document.createElement('details');
+          const summary = document.createElement('summary');
+          summary.textContent = `完整生成資料 · ${shot.proposal.modelLabel || shot.proposal.model}`;
+          const used = document.createElement('div');
+          used.append(textBlock('實際使用的 prompt', shot.proposal.stylePreference));
+          const full = document.createElement('pre');
+          full.textContent = shot.proposal.imagePrompt;
+          details.append(summary, used, full);
+          article.append(details);
+        }
+        shots.append(article);
+      });
+
+      loading.hidden = true;
+      content.hidden = false;
+    } catch (error) {
+      fail(`無法開啟備份：${error.message}`);
+    }
+  }
+
+  addEventListener('pagehide', () => objectUrls.forEach(URL.revokeObjectURL));
+  void render();
+})();
+</script>
+</body>
+</html>

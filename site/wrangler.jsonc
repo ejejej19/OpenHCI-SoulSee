@@ -1,0 +1,64 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "openhci",
+  "main": "src/index.js",
+  "compatibility_date": "2026-06-01",
+  "assets": { "directory": "./public", "binding": "ASSETS" },
+  "r2_buckets": [
+    {
+      "binding": "CUTS_BACKUPS",
+      "bucket_name": "openhci-cuts-backups"
+    }
+  ],
+  "vars": {
+    "VERTEX_PROJECT_ID": "project-8d60b976-9c5d-4cc4-be9",
+    "VERTEX_LOCATION": "global",
+    "VERTEX_GEMINI_IMAGE_MODEL": "gemini-3.1-flash-image",
+    "VERTEX_PROXY_URL": "https://openhci-vertex-proxy-h47h45kufq-de.a.run.app"
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "GHOST_DAILY_LIMIT",
+        "class_name": "DailyGenerationLimit"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1-daily-generation-limit",
+      "new_sqlite_classes": ["DailyGenerationLimit"]
+    }
+  ],
+  "routes": [{ "pattern": "openhci.cechung.com", "custom_domain": true }],
+  "observability": { "enabled": true },
+  "env": {
+    "staging": {
+      "name": "openhci-staging",
+      "assets": { "directory": "./public", "binding": "ASSETS" },
+      "r2_buckets": [
+        {
+          "binding": "CUTS_BACKUPS",
+          "bucket_name": "openhci-staging-cuts-backups"
+        }
+      ],
+      "vars": {
+        "ENVIRONMENT": "staging",
+        "VERTEX_PROJECT_ID": "project-8d60b976-9c5d-4cc4-be9",
+        "VERTEX_LOCATION": "global",
+        "VERTEX_GEMINI_IMAGE_MODEL": "gemini-3.1-flash-image",
+        "VERTEX_PROXY_URL": "https://openhci-vertex-proxy-h47h45kufq-de.a.run.app"
+      },
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "GHOST_DAILY_LIMIT",
+            "class_name": "DailyGenerationLimit"
+          }
+        ]
+      },
+      "routes": [{ "pattern": "staging.openhci.cechung.com", "custom_domain": true }],
+      "observability": { "enabled": true }
+    }
+  }
+}
